@@ -198,7 +198,7 @@ class Agent(object):
         self.n_episodes = n_episodes
         self.record = record
         if self.record:
-            self.env = retro.make(game=game, state=state, record='.')
+            self.env = retro.make(game=game, state=state, record='./recordings')
         else:
             self.env = make(game=game, state=state)
 
