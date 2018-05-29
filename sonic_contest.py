@@ -264,5 +264,6 @@ if __name__ == '__main__':
 
     agent = Agent(actions,record=True)
     m = Model([agent])
+    print("Running on", m.device)
     m.run()
 
