@@ -89,10 +89,19 @@ class Model(object):
         
         self.agents = agents
         
+        policy_model = ConvNet()
+        target_model = ConvNet()
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        if torch.cuda.device_count() > 1:
+
+            policy_model = nn.DataParallel(policy_model)
+            target_model = nn.DataParallel(target_model)
+
+        self.policy_net = policy_model.to(self.device)
         
-        self.policy_net = ConvNet().to(self.device)
-        target_net = ConvNet().to(self.device)
+        target_net = target_model.to(self.device)
         target_net.load_state_dict(self.policy_net.state_dict())
         target_net.eval()
         self.target_net = target_net
