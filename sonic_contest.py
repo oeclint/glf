@@ -163,9 +163,9 @@ class Model(object):
         for agent in self.agents:
             for i_episode in range(agent.n_episodes):
                 if self.log is not None:
-                    self.log.info(
-                        "-->game: {game:<30}; state: {state:<30}; episode: {episode:<4}".format(
-                            game=agent.game, state=agent.state, episode=i_episode))
+                    self.log.info("-->game: {game:<30}".format(game=agent.game))
+                    self.log.info("-->state: {state:<30}".format(state=agent.state))
+                    self.log.info("-->episode: {episode:<4}".format(episode=i_episode))
                 # Initialize the environment and state
                 env = agent.env
                 state = env.reset()
@@ -180,8 +180,8 @@ class Model(object):
                     if (self.log is not None) and (t%10 == 0):
                         time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         self.log.info(
-                            "---->step: {step:<5}; action: {action:<2}; xpos: {xpos:<4}; reward: {reward:<4}; time: {time}".format(
-                                step=t, action=str(action_id), xpos=str(info['x']), reward=str(reward), time=time))
+                            "---->step: {step:>7}; action: {action:>1}; xpos: {xpos:>3}; reward: {reward:>5}; time: {time}".format(
+                                step=t, action=str(action_id), xpos=str(info['x']), reward="{0:.2f}".format(reward), time=time))
                     
                     reward = torch.tensor([reward], device=self.device)
                     
