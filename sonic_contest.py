@@ -9,6 +9,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 import logging
+from datetime import datetime
 
 class Actions(Mapping):
     
@@ -120,8 +121,8 @@ class Model(object):
 
         self.log = log
         if self.log is not None:
-            self.log.info("running on: " + str(self.device))
-            self.log.info("cuda device count: " + str(torch.cuda.device_count()))
+            self.log.info("running on: {device:<5}".format(device=str(self.device)))
+            self.log.info("cuda device count: {count:<5}".format(count=str(torch.cuda.device_count())))
 
     def optimize(self):
         if len(self.memory) < self.batch_size:
@@ -162,7 +163,10 @@ class Model(object):
         for agent in self.agents:
             for i_episode in range(agent.n_episodes):
                 if self.log is not None:
-                    self.log.info("running episode: " + str(i_episode))
+                    time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    self.log.info(
+                        "game: {game:<30}; state: {game:<30}; episode: {episode:<4}; time: {time}".format(
+                            game=agent.game, state=agent.state, episode=i_episode, time=time))
                 # Initialize the environment and state
                 env = agent.env
                 state = env.reset()
@@ -214,6 +218,8 @@ class Agent(object):
 
         self.actions = actions
         self.n_episodes = n_episodes
+        self.game = game
+        self.state = state
         self.record = record
         if self.record:
             self.env = retro.make(game=game, state=state, record='./recordings')
