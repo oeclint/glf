@@ -3,4 +3,4 @@
 #SBATCH -t 2-12
 #SBATCH -N 1
 #SBATCH -J sonic
-srun python sonic_contest.py
+python sonic_contest.py

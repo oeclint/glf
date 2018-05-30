@@ -86,7 +86,8 @@ class Model(object):
                  eps_start = 0.9,
                  eps_end = 0.05,
                  eps_decay = 200,
-                 target_update = 10):
+                 target_update = 10,
+                 log = None):
         
         self.agents = agents
         
@@ -116,6 +117,11 @@ class Model(object):
         self.eps_end = eps_end
         self.eps_decay = eps_decay
         self.target_update = target_update
+
+        self.log = log
+        if self.log is not None:
+            self.log.info("running on: " + str(self.device))
+            self.log.info("cuda device count: " + str(torch.cuda.device_count()))
 
     def optimize(self):
         if len(self.memory) < self.batch_size:
@@ -152,11 +158,11 @@ class Model(object):
            param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
 
-    def run(self, log=None):
+    def run(self):
         for agent in self.agents:
             for i_episode in range(agent.n_episodes):
-                if log is not None:
-                    logging.info("running episode: " + str(i_episode))
+                if self.log is not None:
+                    self.log.info("running episode: " + str(i_episode))
                 # Initialize the environment and state
                 env = agent.env
                 state = env.reset()
@@ -275,10 +281,7 @@ if __name__ == '__main__':
         })
 
     agent = Agent(actions,record=True)
-    m = Model([agent])
-
     logging.basicConfig(filename='log.txt',level=logging.DEBUG)
-    logging.info("running on: " + str(m.device))
-  
-    m.run(log=logging)
+    m = Model([agent],log = logging)  
+    m.run()
 
