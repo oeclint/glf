@@ -1,4 +1,0 @@
-
-INFO:root:running on: cuda
-INFO:root:cuda device count: 2
-INFO:root:running episode: 0

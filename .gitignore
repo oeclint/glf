@@ -1,3 +1,4 @@
 ./retro-contest
 *.bk2
 .DS_Store
+log.txt
