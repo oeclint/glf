@@ -165,7 +165,7 @@ class Model(object):
                 if self.log is not None:
                     time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     self.log.info(
-                        "game: {game:<30}; state: {game:<30}; episode: {episode:<4}; time: {time}".format(
+                        "game: {game:<30}; state: {state:<30}; episode: {episode:<4}; time: {time}".format(
                             game=agent.game, state=agent.state, episode=i_episode, time=time))
                 # Initialize the environment and state
                 env = agent.env
