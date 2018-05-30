@@ -150,6 +150,7 @@ class Model(object):
         expected_state_action_values = (next_state_values * self.gamma) + reward_batch
 
         # Compute Huber loss
+        # TODO: change to entropy
         loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
 
         # Optimize the model
@@ -175,7 +176,6 @@ class Model(object):
                     # Select and perform an action
                     action = self.select_action(state, t, agent)
                     action_id = action.item()
-                    #action_id = 0
                     next_state, reward, done, info = env.step(agent.actions[action_id])
                     next_state = agent.process_obs(next_state)
                     reward = torch.tensor([reward], device=self.device)
@@ -186,7 +186,8 @@ class Model(object):
                     
                     # Move to the next state
                     state = next_state
-                    
+
+                    # Render if not being recorded
                     if not agent.record:
                         env.render()
                     
