@@ -6,7 +6,6 @@ def main():
     obs = env.reset()
     while True:
         obs, rew, done, info = env.step(env.action_space.sample())
-        print(env.action_space.sample())
         env.render()
         if done:
             obs = env.reset()
