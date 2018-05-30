@@ -1,5 +1,4 @@
 from retro_contest.local import make
-import retro
 from collections import deque, Mapping
 from itertools import count
 import random
@@ -164,10 +163,9 @@ class Model(object):
         for agent in self.agents:
             for i_episode in range(agent.n_episodes):
                 if self.log is not None:
-                    time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     self.log.info(
-                        "game: {game:<30}; state: {state:<30}; episode: {episode:<4}; time: {time}".format(
-                            game=agent.game, state=agent.state, episode=i_episode, time=time))
+                        "-->game: {game:<30}; state: {state:<30}; episode: {episode:<4}".format(
+                            game=agent.game, state=agent.state, episode=i_episode))
                 # Initialize the environment and state
                 env = agent.env
                 state = env.reset()
@@ -178,12 +176,19 @@ class Model(object):
                     action_id = action.item()
                     next_state, reward, done, info = env.step(agent.actions[action_id])
                     next_state = agent.process_obs(next_state)
+
+                    if (self.log is not None) and (t%10 == 0):
+                        time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        self.log.info(
+                            "---->step: {step:<5}; action: {action:<2}; xpos: {xpos:<4}; reward: {reward:<4}; time: {time}".format(
+                                step=t, action=str(action_id), xpos=str(info['x']), reward=str(reward), time=time))
+                    
                     reward = torch.tensor([reward], device=self.device)
                     
                     # Store the transition in memory
                     self.memory.push(state=state, action=action,
                                         next_state=next_state, reward=reward)
-                    
+
                     # Move to the next state
                     state = next_state
 
@@ -223,7 +228,7 @@ class Agent(object):
         self.state = state
         self.record = record
         if self.record:
-            self.env = retro.make(game=game, state=state, record='./recordings')
+            self.env = make(game=game, state=state, bk2dir='./recordings')
         else:
             self.env = make(game=game, state=state)
 
