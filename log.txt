@@ -1,1 +1,3 @@
 
+INFO:root:running on: cuda
+INFO:root:running episode: 0

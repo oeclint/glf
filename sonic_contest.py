@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
+import logging
 
 class Actions(Mapping):
     
@@ -151,9 +152,11 @@ class Model(object):
            param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
 
-    def run(self):
+    def run(self, log=None):
         for agent in self.agents:
             for i_episode in range(agent.n_episodes):
+                if log is not None:
+                    logging.info("running episode: " + str(i_episode))
                 # Initialize the environment and state
                 env = agent.env
                 state = env.reset()
@@ -273,6 +276,9 @@ if __name__ == '__main__':
 
     agent = Agent(actions,record=True)
     m = Model([agent])
-    print("Running on", m.device)
-    m.run()
+
+    logging.basicConfig(filename='log.txt',level=logging.DEBUG)
+    logging.info("running on: " + str(m.device))
+  
+    m.run(log=logging)
 
