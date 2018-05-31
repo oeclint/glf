@@ -175,6 +175,13 @@ class Model(object):
                     action = self.select_action(state, t, agent)
                     action_id = action.item()
                     next_state, reward, done, info = env.step(agent.actions[action_id])
+                    
+                    # Do not penalize for going backward, sometimes need to go backwards
+                    # to move forward
+                    
+                    if reward < 0:
+                        reward = 0.0
+                        
                     next_state = agent.process_obs(next_state)
 
                     if (self.log is not None) and (t%10 == 0):
