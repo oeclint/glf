@@ -180,7 +180,7 @@ class Model(object):
                     if (self.log is not None) and (t%10 == 0):
                         time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         self.log.info(
-                            "---->step: {step:>7}; action: {action:>1}; xpos: {xpos:>3}; reward: {reward:>5}; time: {time}".format(
+                            "---->step: {step:>7}; action: {action:>1}; xpos: {xpos:>5}; reward: {reward:>5}; time: {time}".format(
                                 step=t, action=str(action_id), xpos=str(info['x']), reward="{0:.2f}".format(reward), time=time))
                     
                     reward = torch.tensor([reward], device=self.device)

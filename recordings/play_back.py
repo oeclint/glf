@@ -1,7 +1,7 @@
 import retro
 import glob
 
-for f in glob.glob('*.bk2'):
+for f in glob.glob('*007.bk2'):
     movie = retro.Movie(f)
     movie.step()
 
