@@ -81,7 +81,7 @@ class Model(object):
     """
     
     def __init__(self, agents, capacity=10000,
-                 batch_size = 128,
+                 batch_size = 128*78,
                  gamma = 0.999,
                  eps_start = 0.9,
                  eps_end = 0.05,
