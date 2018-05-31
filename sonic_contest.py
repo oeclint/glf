@@ -9,6 +9,7 @@ import torch.nn.functional as F
 import numpy as np
 import logging
 from datetime import datetime
+from sonic_util import SonicEnvWrapper
 
 class Actions(Mapping):
     
@@ -161,28 +162,20 @@ class Model(object):
 
     def run(self):
         for agent in self.agents:
+            env = agent.env
             for i_episode in range(agent.n_episodes):
                 if self.log is not None:
                     self.log.info("-->game: {game:<30}".format(game=agent.game))
                     self.log.info("-->state: {state:<30}".format(state=agent.state))
                     self.log.info("-->episode: {episode:<4}".format(episode=i_episode))
+                    
                 # Initialize the environment and state
-                env = agent.env
                 state = env.reset()
-                state = agent.process_obs(state)
                 for t in count():
                     # Select and perform an action
                     action = self.select_action(state, t, agent)
                     action_id = action.item()
                     next_state, reward, done, info = env.step(agent.actions[action_id])
-                    
-                    # Do not penalize for going backward, sometimes need to go backwards
-                    # to move forward
-                    
-                    if reward < 0:
-                        reward = 0.0
-                        
-                    next_state = agent.process_obs(next_state)
 
                     if (self.log is not None) and (t%10 == 0):
                         time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -235,38 +228,9 @@ class Agent(object):
         self.state = state
         self.record = record
         if self.record:
-            self.env = make(game=game, state=state, bk2dir='./recordings')
+            self.env = SonicEnvWrapper(make(game=game, state=state, bk2dir='./recordings'))
         else:
-            self.env = make(game=game, state=state)
-
-    def process_obs(self, obs):
-        """
-        Each timestep advances the game by 4 frames, and each observation 
-        is the pixels on the screen for the current frame, a shape (224, 320, 3) 
-        array of uint8 values.
-
-        Where:
-        * Height of input planes in pixels = 224
-        * Width in pixels = 320
-        * Number of channels = 3
-
-        However, each conv2d layers expects inputs (observations) of shape (N, Cin, H, W).
-
-        Where:
-        * N  is a batch size
-        * C denotes a number of channels
-        * H is a height of input planes in pixels
-        * W is width in pixels
-
-        Therefore, the axes of the observation pixel array need to be re-arranged.
-        """
-
-        # add new axis at the beginning (N)
-        obs = obs[np.newaxis]
-        # move last axis (C) to the second position
-        obs = np.moveaxis(obs,-1,1)
-
-        return obs
+            self.env = SonicEnvWrapper(make(game=game, state=state))
     
     def run(self):
         for _ in range(self.n_episodes):
