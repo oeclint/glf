@@ -17,8 +17,7 @@ class PolicyPlus(nn.Module):
         self.state = nn.Linear(29600, latent_size)
 
         self.key_size = key_size
-        self.g_size = g_size
-        self.G = nn.Parameters(torch.ones(1,key_size,g_size))
+
 
         #key generation neural network
         self.key_gen = nn.Sequential(nn.Linear(latent_size,latent_size),self.BatchNorm1d(latent_size),nn.Relu(),nn.Linear(latent_size,latent_size),
@@ -34,26 +33,29 @@ class PolicyPlus(nn.Module):
         x = F.relu(self.bn3(self.conv3(x)))
         return self.state(x.view(x.size(0), -1))
 
-    def forward(self,x):
+    def forward(self,x,G=None):
         latent_vector = self.image_features(x)
 
+        combination = torch.cat([latent_vector,torch.ones(x.size(0),self.key_size).to(x.device)],dim=1)
 
-        #generate a look-up key for the G memory. add an extra book-keeping dimension
-        key = self.key_gen(latent_vector).unsqueeze_(1)
+        if G is not None:
 
-        #add a batch dimension -- just a little bit of dimensional resizing
-        G_expand = G.expand((key.size(0),key.size(1),self.g_size))
+            #generate a look-up key for the G memory. add an extra book-keeping dimension
+            key = self.key_gen(latent_vector).unsqueeze_(1)
 
-        #dot the key into memory
-        weights = torch.bmm(key,G_memory).view(-1,1,self.g_size) 
-        #take softmax to get weights for each entry in the memory (the lookup)
-        weights = F.softmax(weights,dim=1)
+            #add a batch dimension -- just a little bit of dimensional resizing
+            G_expand = G.expand((key.size(0),key.size(1),G.size(1)))
 
-        #do a weighted sum of all of the columns
-        value = torch.sum(G_expand*weights,dim=2).view(-1,self.key_size)
+            #dot the key into memory
+            weights = torch.bmm(key,G_memory).view(-1,G.size(1)) 
+            #take softmax to get weights for each entry in the memory (the lookup)
+            weights = F.softmax(weights,dim=1).view(-1,1,G.size(1)) 
 
-        #combine the result of the lookup with the latent state vector
-        combination = torch.cat([latent_vector,value],dim=1)
+            #do a weighted sum of all of the columns
+            value = torch.sum(G_expand*weights,dim=2).view(-1,G.size(1))
+
+            #combine the result of the lookup with the latent state vector
+            combination = torch.cat([latent_vector,value],dim=1)
 
 
         #return policy decision
