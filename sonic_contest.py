@@ -81,7 +81,7 @@ class Model(object):
     """
     
     def __init__(self, agents, capacity=10000,
-                 batch_size = 128*78,
+                 batch_size = 128*10,
                  gamma = 0.999,
                  eps_start = 0.9,
                  eps_end = 0.05,
@@ -227,7 +227,7 @@ class Model(object):
 
 class Agent(object):
 
-    def __init__(self, actions, n_episodes=30, game='SonicTheHedgehog-Genesis', state='LabyrinthZone.Act1', record=False):
+    def __init__(self, actions, n_episodes=100, game='SonicTheHedgehog-Genesis', state='LabyrinthZone.Act1', record=False):
 
         self.actions = actions
         self.n_episodes = n_episodes
