@@ -57,9 +57,9 @@ class ConvNet(nn.Module):
     the output is the quality of each action in the given state.
     """
     
-    def __init__(self):
+    def __init__(self, n_channel_1):
         super(ConvNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 16, kernel_size=5, stride=2)
+        self.conv1 = nn.Conv2d(n_channel_1, 16, kernel_size=5, stride=2)
         self.bn1 = nn.BatchNorm2d(16)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
         self.bn2 = nn.BatchNorm2d(32)
@@ -88,12 +88,13 @@ class Model(object):
                  eps_end = 0.05,
                  eps_decay = 200,
                  target_update = 10,
+                 n_cat_states = 5,
                  log = None):
         
         self.agents = agents
         
-        policy_model = ConvNet()
-        target_model = ConvNet()
+        policy_model = ConvNet(n_cat_states * 3)
+        target_model = ConvNet(n_cat_states * 3)
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -118,6 +119,8 @@ class Model(object):
         self.eps_end = eps_end
         self.eps_decay = eps_decay
         self.target_update = target_update
+
+        self.n_cat_states = n_cat_states
 
         self.log = log
         if self.log is not None:
@@ -171,9 +174,15 @@ class Model(object):
                     
                 # Initialize the environment and state
                 state = env.reset()
+                # Stacked states
+                states = deque([state]*self.n_cat_states,maxlen=self.n_cat_states)
+                state_cat=np.concatenate(states, axis=1)
+                
+                next_states = deque(maxlen=self.n_cat_states)
+                
                 for t in count():
                     # Select and perform an action
-                    action = self.select_action(state, t, agent)
+                    action = self.select_action(state_cat, t, agent)
                     action_id = action.item()
                     next_state, reward, done, info = env.step(agent.actions[action_id])
 
@@ -184,24 +193,37 @@ class Model(object):
                                 step=t, action=str(action_id), xpos=str(info['x']), reward="{0:.2f}".format(reward), time=time))
                     
                     reward = torch.tensor([reward], device=self.device)
-                    
-                    # Store the transition in memory
-                    self.memory.push(state=state, action=action,
-                                        next_state=next_state, reward=reward)
 
-                    # Move to the next state
-                    state = next_state
+                    # States to be stacked, continue to next loop if didn't reach target size
 
-                    # Render if not being recorded
-                    if not agent.record:
-                        env.render()
+                    next_states.append(next_state)
                     
-                    # Perform one step of the optimization
-                    self.optimize()
-                    if done:
-                        #episode_durations.append(t + 1)
-                        #plot_durations()
-                        break
+                    if len(next_states) == self.n_cat_states:
+
+                        next_state_cat=np.concatenate(next_states, axis=1)
+                        
+                        # Store the transition in memory
+                        self.memory.push(state=state_cat, action=action,
+                                            next_state=next_state_cat, reward=reward)
+
+                        # Move to the next state
+                        state_cat = next_state_cat
+
+                        # Render if not being recorded
+                        if not agent.record:
+                            env.render()
+                        
+                        # Perform one step of the optimization
+                        self.optimize()
+                        if done:
+                            #episode_durations.append(t + 1)
+                            #plot_durations()
+                            break
+
+                    else:
+                        states.append(next_state)
+                        state_cat=np.concatenate(states, axis=1)
+                        
                 # Update the target network
                 if i_episode % self.target_update == 0:
                     self.target_net.load_state_dict(self.policy_net.state_dict())
