@@ -6,4 +6,4 @@
 #SBATCH -J sonic
 #SBATCH -e errors.txt
 echo "" > log.txt
-python sonic_contest.py
+python train_sonic.py
