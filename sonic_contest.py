@@ -65,13 +65,17 @@ class ConvNet(nn.Module):
         self.bn2 = nn.BatchNorm2d(32)
         self.conv3 = nn.Conv2d(32, 32, kernel_size=5, stride=2)
         self.bn3 = nn.BatchNorm2d(32)
-        self.head = nn.Linear(29600, 10)
+        self.fc1 = nn.Linear(29600, 128)
+        self.fc2 = nn.Linear(128, 10)
     
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.relu(self.bn2(self.conv2(x)))
         x = F.relu(self.bn3(self.conv3(x)))
-        return self.head(x.view(x.size(0), -1))
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
 
 class Model(object):
     
@@ -82,7 +86,7 @@ class Model(object):
     """
     
     def __init__(self, agents, capacity=10000,
-                 batch_size = 128*10,
+                 batch_size = 128,
                  gamma = 0.999,
                  eps_start = 0.9,
                  eps_end = 0.05,
