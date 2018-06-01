@@ -66,11 +66,13 @@ class NetPlus(nn.Module):
         #this is the original code
         self.conv1 = nn.Conv2d(num_input_frames*3, 64, kernel_size=5, stride=2)
         self.bn1 = nn.BatchNorm2d(64)
-        self.conv2 = nn.Conv2d(64, 32, kernel_size=5, stride=2)
-        self.bn2 = nn.BatchNorm2d(32)
-        self.conv3 = nn.Conv2d(32, 32, kernel_size=5, stride=2)
+        self.conv2 = nn.Conv2d(64, 64, kernel_size=5, stride=2)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.conv3 = nn.Conv2d(64 64, kernel_size=5, stride=2)
         self.bn3 = nn.BatchNorm2d(32)
-        self.state = nn.Linear(29600, latent_size)
+        self.dense1 = nn.Linear(29600, 512)
+        self.bn4 = nn.BatchNorm1d(512)
+        self.state = nn.Linear(512, latent_size)
 
         self.key_size = key_size
 
@@ -87,13 +89,16 @@ class NetPlus(nn.Module):
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.relu(self.bn2(self.conv2(x)))
         x = F.relu(self.bn3(self.conv3(x)))
-        return self.state(x.view(x.size(0), -1))
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.bn4(self.dense1(x)))
+        return self.state(x)
 
     def forward(self,x,G=None):
         latent_vector = self.image_features(x)
 
         combination = torch.cat([latent_vector,torch.ones(x.size(0),self.key_size).to(x.device)],dim=1)
 
+        #this part stays dormant until you pass a G
         if G is not None:
 
             #generate a look-up key for the G memory. add an extra book-keeping dimension
@@ -126,7 +131,7 @@ class Model(object):
     Neural networks are used to map x->y, where x is the state/observation and y is the reward for all the actions in the given state
     """
     
-    def __init__(self, agents, capacity=10000,
+    def __init__(self, agents, capacity=1000000,
                  batch_size = 128*10,
                  gamma = 0.999,
                  eps_start = 0.9,
