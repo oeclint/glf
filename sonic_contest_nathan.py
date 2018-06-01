@@ -80,12 +80,10 @@ class NetPlus(nn.Module):
 
 
         #key generation neural network
-        self.key_gen = nn.Sequential(nn.Linear(latent_size,latent_size),nn.ReLU(),nn.Linear(latent_size,latent_size),nn.ReLU(),nn.Linear(latent_size,key_size))
+        self.key_gen = nn.Sequential(nn.Linear(latent_size,latent_size),nn.ELU(),nn.Linear(latent_size,latent_size),nn.ELU(),nn.Linear(latent_size,key_size))
         #output neural network
-        self.output = nn.Sequential(nn.Linear(latent_size+key_size,latent_size),nn.ReLU(),nn.Linear(latent_size,latent_size),nn.ReLU(),nn.Linear(latent_size,10))
-        
-        self.key_gen = nn.utils.weight_norm(self.key_gen)
-        self.output = nn.utils.weight_norm(self.output)
+        self.output = nn.Sequential(nn.Linear(latent_size+key_size,latent_size),nn.ELU(),nn.Linear(latent_size,latent_size),nn.ELU(),nn.Linear(latent_size,10))
+
     
     def image_features(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
