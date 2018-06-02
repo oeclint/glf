@@ -51,7 +51,7 @@ class SonicEnvWrapper(gym.Wrapper):
     def step(self, action):
         obs, rew, done, info = self.env.step(action)
         if rew < 0:
-            rew = rew * 0.1
+            rew = rew * 0.4
  #       self._cur_x += rew
  #       rew = max(0.0, self._cur_x - self._max_x)
  #       self._max_x = max(self._max_x, self._cur_x)

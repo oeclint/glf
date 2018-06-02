@@ -85,7 +85,7 @@ class Model(object):
     Neural networks are used to map x->y, where x is the state/observation and y is the reward for all the actions in the given state
     """
     
-    def __init__(self, agents, capacity=10000,
+    def __init__(self, agents, capacity=1000000,
                  batch_size = 128,
                  gamma = 0.999,
                  eps_start = 0.9,
