@@ -125,6 +125,8 @@ class Model(object):
         self.eps_start = eps_start
         self.eps_end = eps_end
         self.eps_decay = eps_decay
+        self.eps_step = 0
+        
         self.target_update = target_update
 
         self.n_cat_states = n_cat_states
@@ -185,10 +187,11 @@ class Model(object):
                 state_cat=np.concatenate(states, axis=1)
                 
                 next_states = deque(maxlen=self.n_cat_states)
+                rewards = deque(maxlen=10)
                 
                 for t in count():
                     # Select and perform an action
-                    action = self.select_action(state_cat, t, agent)
+                    action = self.select_action(state_cat, agent)
                     action_id = action.item()
                     next_state, reward, done, info = env.step(agent.actions[action_id])
 
@@ -197,7 +200,14 @@ class Model(object):
                         self.log.info(
                             "---->step: {step:>7}; action: {action:>1}; xpos: {xpos:>5}; reward: {reward:>5}; time: {time}".format(
                                 step=t, action=str(action_id), xpos=str(info['x']), reward="{0:.2f}".format(reward), time=time))
+
+                    rewards.append(reward)
                     
+                    if len(rewards)==10:
+                        if all([rew<0.01 for rew in self.rewards]):
+                            # if rewards are bad for 10 steps then take more random guesses
+                            self.eps_step = 0
+                            
                     reward = torch.tensor([reward], device=self.device)
 
                     # States to be stacked, continue to next loop if didn't reach target size
@@ -234,11 +244,12 @@ class Model(object):
                 if i_episode % self.target_update == 0:
                     self.target_net.load_state_dict(self.policy_net.state_dict())
 
-    def select_action(self, state, step, agent):
+    def select_action(self, state, agent):
         state = torch.from_numpy(state).to(self.device).type('torch.FloatTensor')
         sample = np.random.random()
         eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * \
-            np.exp(-1. * step / self.eps_decay)
+            np.exp(-1. * self.eps_step / self.eps_decay)
+        self.eps_step = self.eps_step + 1
         if sample > eps_threshold:
             with torch.no_grad():
                 return self.policy_net(state).max(1)[1].view(1, 1)
