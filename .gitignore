@@ -2,6 +2,7 @@
 *.bk2
 .DS_Store
 *.txt
+*recordings_*
 *~
 *.out
 __pycache__

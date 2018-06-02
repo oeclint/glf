@@ -10,6 +10,8 @@ import numpy as np
 import logging
 from datetime import datetime
 from sonic_util import SonicEnvWrapper
+import csv
+import os
 
 class Actions(Mapping):
     
@@ -85,7 +87,7 @@ class Model(object):
     Neural networks are used to map x->y, where x is the state/observation and y is the reward for all the actions in the given state
     """
     
-    def __init__(self, agents, capacity=10000000,
+    def __init__(self, agents, capacity=20000000,
                  batch_size = 128,
                  gamma = 0.999,
                  eps_start = 0.9,
@@ -173,8 +175,13 @@ class Model(object):
 
     def run(self):
         for agent in self.agents:
-            env = agent.env
+ #           env = agent.env
  #           self.eps_step = 0
+            if agent.record:
+                env = SonicEnvWrapper(make(game=agent.game, state=agent.state, bk2dir=agent.path))
+            else:
+                env = SonicEnvWrapper(make(game=agent.game, state=agent.state))
+                
             for i_episode in range(agent.n_episodes):
                 if self.log is not None:
                     self.log.info("-->game: {game:<30}".format(game=agent.game))
@@ -267,17 +274,19 @@ class Model(object):
 
 class Agent(object):
 
-    def __init__(self, actions, n_episodes=100, game='SonicTheHedgehog-Genesis', state='LabyrinthZone.Act1', record=False):
+    def __init__(self, actions, n_episodes=50, game='SonicTheHedgehog-Genesis', state='LabyrinthZone.Act1', record=None):
 
         self.actions = actions
         self.n_episodes = n_episodes
         self.game = game
         self.state = state
-        self.record = record
-        if self.record:
-            self.env = SonicEnvWrapper(make(game=game, state=state, bk2dir='./recordings'))
-        else:
-            self.env = SonicEnvWrapper(make(game=game, state=state))
+        if record is not None:
+            self.record = True
+        self.path = record
+        #if self.record:
+        #    self.env = SonicEnvWrapper(make(game=game, state=state, bk2dir=record))
+        #else:
+        #    self.env = SonicEnvWrapper(make(game=game, state=state))
     
     def run(self):
         for _ in range(self.n_episodes):
@@ -307,9 +316,20 @@ if __name__ == '__main__':
         6: [1,0,0,0,0,1,0,0,0,0,0,0], # SPIN DASH (>= SONIC 2)
         })
 
-    agent = Agent(actions,record=True)
+    agents = []
+
+    dictReader = csv.DictReader(open('sonic-train.csv', 'r'), fieldnames = ['game', 'state'], delimiter = ',', quotechar = '"')
+    for i,row in enumerate(dictReader):
+        if i != 0:
+            #skip header
+            directory = "recordings_{0}_{1}".format(row['game'],row['state'])
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+            ag = Agent(actions,game=row['game'],state=row['state'],record=directory)
+            agents.append(ag)
+
     logging.basicConfig(filename='log.txt',level=logging.DEBUG)
-    m = Model([agent],log = logging)  
+    m = Model(agents,log = logging)  
     m.run()
     m.save_policy('policy_model.p')
 
