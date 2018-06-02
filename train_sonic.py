@@ -57,16 +57,16 @@ class ConvNet(nn.Module):
     the output is the quality of each action in the given state.
     """
     
-    def __init__(self, n_channel_1):
+    def __init__(self, n_in, n_out):
         super(ConvNet, self).__init__()
-        self.conv1 = nn.Conv2d(n_channel_1, 16, kernel_size=5, stride=2)
+        self.conv1 = nn.Conv2d(n_in, 16, kernel_size=5, stride=2)
         self.bn1 = nn.BatchNorm2d(16)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
         self.bn2 = nn.BatchNorm2d(32)
         self.conv3 = nn.Conv2d(32, 32, kernel_size=5, stride=2)
         self.bn3 = nn.BatchNorm2d(32)
         self.fc1 = nn.Linear(29600, 512)
-        self.fc2 = nn.Linear(512, 10)
+        self.fc2 = nn.Linear(512, n_out)
     
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
@@ -85,7 +85,7 @@ class Model(object):
     Neural networks are used to map x->y, where x is the state/observation and y is the reward for all the actions in the given state
     """
     
-    def __init__(self, agents, capacity=1000000,
+    def __init__(self, agents, capacity=10000000,
                  batch_size = 128,
                  gamma = 0.999,
                  eps_start = 0.9,
@@ -96,9 +96,12 @@ class Model(object):
                  log = None):
         
         self.agents = agents
+
+        if not all([len(a.actions)==len(agents[0].actions) for a in agents]):
+            raise ValueError("All agents must have the same number of actions")
         
-        policy_model = ConvNet(n_cat_states * 3)
-        target_model = ConvNet(n_cat_states * 3)
+        policy_model = ConvNet(n_cat_states * 3, len(agents[0].actions))
+        target_model = ConvNet(n_cat_states * 3, len(agents[0].actions))
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -243,6 +246,12 @@ class Model(object):
         else:
             return torch.tensor([[np.random.randint(
                         len(agent.actions))]], device=self.device, dtype=torch.long)
+
+    def save_policy(self, path):
+        torch.save(self.policy_net.state_dict(), path)
+
+    def load_policy(self, path):
+        self.policy_net.load_state_dict(torch.load(path))
 
 class Agent(object):
 
