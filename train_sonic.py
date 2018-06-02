@@ -299,4 +299,5 @@ if __name__ == '__main__':
     logging.basicConfig(filename='log.txt',level=logging.DEBUG)
     m = Model([agent],log = logging)  
     m.run()
+    m.save('.')
 
