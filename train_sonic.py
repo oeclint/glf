@@ -195,7 +195,7 @@ class Model(object):
                 state_cat=np.concatenate(states, axis=1)
                 
                 next_states = deque(maxlen=self.n_cat_states)
-                rewards = deque(maxlen=10)
+                rewards = deque(maxlen=20)
                 
                 for t in count():
                     # Select and perform an action
@@ -211,10 +211,11 @@ class Model(object):
 
                     rewards.append(reward)
                     
-                    if len(rewards)==10:
+                    if len(rewards)==20:
                         if all([rew<0.01 for rew in rewards]):
-                            # if rewards are bad for 10 steps then take more random guesses
-                            self.eps_start = 0.6
+                            # if rewards are bad for 20 steps then take more random guesses
+                            if self.eps_start < 0.20:
+                                self.eps_start = 0.20
                             self.eps_step = 0
                             
                     reward = torch.tensor([reward], device=self.device)
