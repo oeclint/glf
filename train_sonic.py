@@ -205,7 +205,7 @@ class Model(object):
                     rewards.append(reward)
                     
                     if len(rewards)==10:
-                        if all([rew<0.01 for rew in self.rewards]):
+                        if all([rew<0.01 for rew in rewards]):
                             # if rewards are bad for 10 steps then take more random guesses
                             self.eps_start = 0.6
                             self.eps_step = 0
