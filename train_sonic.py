@@ -243,7 +243,9 @@ class Model(object):
                         self.optimize()
                         if done:
                             #episode_durations.append(t + 1)
-                            #plot_durations()
+                            #plot_durations()"
+                            #"{0}_{1}.p".format(agent.game,agent.state)
+                            self.save_policy("{0}_{1}.p".format(agent.game,agent.state))
                             break
 
                     else:
