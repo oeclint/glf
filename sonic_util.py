@@ -42,11 +42,12 @@ class SonicEnvWrapper(gym.Wrapper):
         super(SonicEnvWrapper, self).__init__(env)
 #        self._cur_x = 0
 #        self._max_x = 0
-        self.rewards = deque(maxlen=10)
+        self.rewards = deque(maxlen=5)
 
     def reset(self, **kwargs):
 #        self._cur_x = 0
 #        self._max_x = 0
+        self.rewards = deque(maxlen=5)
         obs = self.env.reset(**kwargs)
         return process_obs(obs)
 
