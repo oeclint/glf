@@ -174,6 +174,7 @@ class Model(object):
     def run(self):
         for agent in self.agents:
             env = agent.env
+            self.eps_step = 0
             for i_episode in range(agent.n_episodes):
                 if self.log is not None:
                     self.log.info("-->game: {game:<30}".format(game=agent.game))
