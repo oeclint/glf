@@ -60,38 +60,43 @@ class NetPlus(nn.Module):
     the output is the quality of each action in the given state.
     """
     
-    def __init__(self,g_size=10,latent_size=64,key_size=64,num_input_frames=1):
+    def __init__(self,g_size=10,latent_size=64,key_size=64,num_input_frames=5):
         super(NetPlus, self).__init__()
 
         #this is the original code
-        self.conv1 = nn.Conv2d(num_input_frames*3, 64, kernel_size=5, stride=2)
+        self.conv1 = nn.Conv2d(num_input_frames*3, 64, kernel_size=5, stride=2,dilation=2)
         self.bn1 = nn.BatchNorm2d(64)
-        self.conv2 = nn.Conv2d(64, 64, kernel_size=5, stride=2)
+        self.conv2 = nn.Conv2d(64, 64, kernel_size=5, stride=2,dilation=2)
         self.bn2 = nn.BatchNorm2d(64)
-        self.conv3 = nn.Conv2d(64 64, kernel_size=5, stride=2)
-        self.bn3 = nn.BatchNorm2d(32)
-        self.dense1 = nn.Linear(29600, 512)
-        self.bn4 = nn.BatchNorm1d(512)
-        self.state = nn.Linear(512, latent_size)
+        self.conv3 = nn.Conv2d(64, 64, kernel_size=5, stride=2,dilation=2)
+        self.bn3 = nn.BatchNorm2d(64)
+        self.conv4 = nn.Conv2d(64+1,512,kernel_size=5,stride=2)
+        self.bn4 = nn.BatchNorm2d(512)
+        self.conv5 = nn.Conv2d(512,latent_size,kernel_size=5)
+        self.bn5 = nn.BatchNorm2d(latent_size)
+       
 
         self.key_size = key_size
 
 
         #key generation neural network
-        self.key_gen = nn.Sequential(nn.Linear(latent_size,latent_size),self.BatchNorm1d(latent_size),nn.Relu(),nn.Linear(latent_size,latent_size),
-            self.BatchNorm1d(latent_size),nn.Relu(),nn.Linear(latent_size,key_size))
+        self.key_gen = nn.Sequential(nn.Linear(latent_size,latent_size),nn.BatchNorm1d(latent_size),nn.ReLU(),nn.Linear(latent_size,latent_size),
+            nn.BatchNorm1d(latent_size),nn.ReLU(),nn.Linear(latent_size,key_size))
 
         #output neural network
-        self.output = nn.Sequential(nn.Linear(latent_size+key_size,latent_size),self.BatchNorm1d(latent_size),nn.Relu(),nn.Linear(latent_size,latent_size),
-            self.BatchNorm1d(latent_size),nn.Relu(),nn.Linear(latent_size,10))
+        self.output = nn.Sequential(nn.Linear(latent_size+key_size,latent_size),nn.BatchNorm1d(latent_size),nn.ReLU(),nn.Linear(latent_size,latent_size),
+            nn.BatchNorm1d(latent_size),nn.ReLU(),nn.Linear(latent_size,10))
     
     def image_features(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.relu(self.bn2(self.conv2(x)))
         x = F.relu(self.bn3(self.conv3(x)))
-        x = x.view(x.size(0), -1)
-        x = F.relu(self.bn4(self.dense1(x)))
-        return self.state(x)
+        position = torch.linspace(0,1,x.size(2)*x.size(3)).view(1,x.size(2),x.size(3)).expand(x.size(0),1,x.size(2),x.size(3)).to(x.device)
+        x = torch.cat([x,position],dim=1)
+        x = F.relu(self.bn4(self.conv4(x)))
+        x = F.relu(self.bn5(self.conv5(x)))
+        x = F.adaptive_max_pool2d(x,1)
+        return x.view(x.size(0),-1)
 
     def forward(self,x,G=None):
         latent_vector = self.image_features(x)
@@ -132,7 +137,7 @@ class Model(object):
     """
     
     def __init__(self, agents, capacity=1000000,
-                 batch_size = 128*10,
+                 batch_size = 128*4,
                  gamma = 0.999,
                  eps_start = 0.9,
                  eps_end = 0.05,
