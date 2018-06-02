@@ -242,9 +242,6 @@ class Model(object):
                         # Perform one step of the optimization
                         self.optimize()
                         if done:
-                            #episode_durations.append(t + 1)
-                            #plot_durations()"
-                            #"{0}_{1}.p".format(agent.game,agent.state)
                             self.save_policy("{0}_{1}.p".format(agent.game,agent.state))
                             break
 
@@ -255,6 +252,8 @@ class Model(object):
                 # Update the target network
                 if i_episode % self.target_update == 0:
                     self.target_net.load_state_dict(self.policy_net.state_dict())
+                    
+            del env
 
     def select_action(self, state, agent):
         state = torch.from_numpy(state).to(self.device).type('torch.FloatTensor')
@@ -277,7 +276,7 @@ class Model(object):
 
 class Agent(object):
 
-    def __init__(self, actions, n_episodes=50, game='SonicTheHedgehog-Genesis', state='LabyrinthZone.Act1', record=None):
+    def __init__(self, actions, n_episodes=2, game='SonicTheHedgehog-Genesis', state='LabyrinthZone.Act1', record=None):
 
         self.actions = actions
         self.n_episodes = n_episodes
@@ -291,14 +290,14 @@ class Agent(object):
         #else:
         #    self.env = SonicEnvWrapper(make(game=game, state=state))
     
-    def run(self):
-        for _ in range(self.n_episodes):
-            done = False
-            obs = self.env.reset()
-            while not done:
-                next_obs, reward, done, info = self.env.step(self.actions.sample())
-                if not self.record:
-                    self.env.render()
+#    def run(self):
+#        for _ in range(self.n_episodes):
+#            done = False
+#            obs = self.env.reset()
+#            while not done:
+#                next_obs, reward, done, info = self.env.step(self.actions.sample())
+#                if not self.record:
+#                    self.env.render()
 
 if __name__ == '__main__':
 
