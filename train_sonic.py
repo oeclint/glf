@@ -66,7 +66,7 @@ class ConvNet(nn.Module):
         self.conv3 = nn.Conv2d(32, 32, kernel_size=5, stride=2)
         self.bn3 = nn.BatchNorm2d(32)
         self.fc1 = nn.Linear(29600, 512)
-        self.fc2 = nn.Linear(512, 10)
+        self.fc2 = nn.Linear(512, 7)
     
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
@@ -274,19 +274,16 @@ if __name__ == '__main__':
     The activation of the sub-action is determined by the value of the item (0 or 1).
     Therefore, there are 2^12 (4096) different possible actions.
     
-    However, some actions are redundant. Only 10 unique actions are used by this object.
+    However, some actions are redundant. Only 7 unique actions are used by this object.
     """
     actions = Actions({
-        0: [0,0,0,0,1,0,0,0,0,0,0,0], # UP
-        1: [0,0,0,0,0,1,0,0,0,0,0,0], # DOWN
-        2: [0,0,0,0,0,0,1,0,0,0,0,0], # LEFT
-        3: [0,0,0,0,0,0,0,1,0,0,0,0], # RIGHT
-        4: [0,0,0,0,0,1,1,0,0,0,0,0], # LEFT DOWN
-        5: [0,0,0,0,0,1,0,1,0,0,0,0], # RIGHT DOWN
-        6: [1,0,0,0,0,0,0,0,0,0,0,0], # JUMP
-        7: [1,0,0,0,0,0,1,0,0,0,0,0], # JUMP LEFT
-        8: [1,0,0,0,0,0,0,1,0,0,0,0], # JUMP RIGHT
-        9: [1,0,0,0,0,1,0,0,0,0,0,0], # SPIN DASH (>= SONIC 2)
+        0: [0,0,0,0,0,1,0,0,0,0,0,0], # DOWN
+        1: [0,0,0,0,0,0,1,0,0,0,0,0], # LEFT
+        2: [0,0,0,0,0,0,0,1,0,0,0,0], # RIGHT
+        3: [0,0,0,0,0,1,1,0,0,0,0,0], # LEFT DOWN
+        4: [0,0,0,0,0,1,0,1,0,0,0,0], # RIGHT DOWN
+        5: [1,0,0,0,0,0,0,0,0,0,0,0], # JUMP
+        6: [1,0,0,0,0,1,0,0,0,0,0,0], # SPIN DASH (>= SONIC 2)
         })
 
     agent = Agent(actions,record=True)
