@@ -1,4 +1,4 @@
-from collections import deque
+from collections import deque, OrderedDict
 from itertools import count
 import random
 import numpy as np
@@ -73,6 +73,7 @@ class Model(object):
                  target_update = 10,
                  n_cat_states = 5,
                  n_actions = 7,
+                 device = None,
                  policy = None,
                  log = None):
         
@@ -81,7 +82,12 @@ class Model(object):
 
         if policy is not None:
             # If policy exists only optimize last layer
-            policy_model.load_state_dict(torch.load(policy))
+            state_dict = torch.load(policy)
+            new_state_dict = OrderedDict()
+            for k, v in state_dict.items():
+                name = k.replace('module.','') # remove `module.`
+                new_state_dict[name] = v
+            policy_model.load_state_dict(new_state_dict)
             # Need to set requires_grad = False to freeze the paramenters so that the
             # gradients are not computed in backward()
             for param in policy_model.parameters():
@@ -93,9 +99,12 @@ class Model(object):
             self.policy_net_parameters = policy_model.fc2.parameters()
         else:
             self.policy_net_parameters = policy_model.parameters()
-            
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        if device is None:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = torch.device(device)
+            
         if torch.cuda.device_count() > 1:
 
             policy_model = nn.DataParallel(policy_model)
@@ -228,8 +237,7 @@ class Model(object):
                         # Move to the next state
                         state_cat = next_state_cat
 
-                        # Render if not being recorded
-                        if not agent.record:
+                        if agent.render:
                             env.render()
                         
                         # Perform one step of the optimization
