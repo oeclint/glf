@@ -73,6 +73,7 @@ class Model(object):
                  target_update = 10,
                  n_cat_states = 5,
                  n_actions = 7,
+                 device = None,
                  policy = None,
                  log = None):
         
@@ -93,9 +94,12 @@ class Model(object):
             self.policy_net_parameters = policy_model.fc2.parameters()
         else:
             self.policy_net_parameters = policy_model.parameters()
-            
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        if device is None:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = torch.device(device)
+            
         if torch.cuda.device_count() > 1:
 
             policy_model = nn.DataParallel(policy_model)
