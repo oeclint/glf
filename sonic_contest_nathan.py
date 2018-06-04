@@ -60,7 +60,7 @@ class NetPlus(nn.Module):
     the output is the quality of each action in the given state.
     """
     
-    def __init__(self,g_size=10,latent_size=64,key_size=64,num_input_frames=5):
+    def __init__(self,g_size=10,latent_size=128,key_size=64,num_input_frames=5):
         super(NetPlus, self).__init__()
 
         #this is the original code
@@ -76,14 +76,20 @@ class NetPlus(nn.Module):
         self.bn5 = nn.BatchNorm2d(latent_size)
        
 
+
+        self.G = nn.Parameters(torch.randn(latent_size,g_size))
+
         self.key_size = key_size
+
+        wn = nn.utils.weight_norm
+
 
 
         #key generation neural network
-        self.key_gen = nn.Sequential(nn.Linear(latent_size,latent_size),nn.ELU(),nn.Linear(latent_size,latent_size),nn.ELU(),nn.Linear(latent_size,key_size))
+        self.key_gen = nn.Sequential(wn(nn.Linear(latent_size,latent_size)),nn.ELU(),wn(nn.Linear(latent_size,latent_size)),nn.ELU(),wn(nn.Linear(latent_size,key_size)))
         #output neural network
-        self.output = nn.Sequential(nn.Linear(latent_size+key_size,latent_size),nn.ELU(),nn.Linear(latent_size,latent_size),nn.ELU(),nn.Linear(latent_size,10))
-
+        self.output = nn.Sequential(wn(nn.Linear(latent_size+key_size,latent_size)),nn.ELU(),wn(nn.Linear(latent_size,latent_size)),nn.ELU(),wn(nn.Linear(latent_size,10)))
+        self.fuse = nn.Linear(latent_size+key_size,latent_size)
     
     def image_features(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
@@ -99,7 +105,7 @@ class NetPlus(nn.Module):
     def forward(self,x,G=None):
         latent_vector = self.image_features(x)
 
-        combination = torch.cat([latent_vector,torch.ones(x.size(0),self.key_size).to(x.device)],dim=1)
+        combination = latent_vector#torch.cat([latent_vector,torch.ones(x.size(0),self.key_size).to(x.device)],dim=1)
 
         #this part stays dormant until you pass a G
         if G is not None:
@@ -120,7 +126,7 @@ class NetPlus(nn.Module):
 
             #combine the result of the lookup with the latent state vector
             combination = torch.cat([latent_vector,value],dim=1)
-
+            combination = self.fuse(combination)
 
         #return policy decision
         return self.output(combination)
@@ -135,7 +141,7 @@ class Model(object):
     """
     
     def __init__(self, agents, capacity=1000000,
-                 batch_size = 128*4,
+                 batch_size = 64,
                  gamma = 0.999,
                  eps_start = 0.9,
                  eps_end = 0.05,
@@ -179,6 +185,8 @@ class Model(object):
         if self.log is not None:
             self.log.info("running on: {device:<5}".format(device=str(self.device)))
             self.log.info("cuda device count: {count:<5}".format(count=str(torch.cuda.device_count())))
+
+ 
 
     def optimize(self):
         if len(self.memory) < self.batch_size:
