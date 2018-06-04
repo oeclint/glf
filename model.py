@@ -1,4 +1,4 @@
-from collections import deque
+from collections import deque, OrderedDict
 from itertools import count
 import random
 import numpy as np
@@ -82,7 +82,12 @@ class Model(object):
 
         if policy is not None:
             # If policy exists only optimize last layer
-            policy_model.load_state_dict(torch.load(policy))
+            state_dict = torch.load(policy)
+            new_state_dict = OrderedDict()
+            for k, v in state_dict.items():
+                name = k.replace('module.','') # remove `module.`
+                new_state_dict[name] = v
+            policy_model.load_state_dict(new_state_dict)
             # Need to set requires_grad = False to freeze the paramenters so that the
             # gradients are not computed in backward()
             for param in policy_model.parameters():
