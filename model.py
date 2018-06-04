@@ -228,8 +228,7 @@ class Model(object):
                         # Move to the next state
                         state_cat = next_state_cat
 
-                        # Render if not being recorded
-                        if not agent.record:
+                        if agent.render:
                             env.render()
                         
                         # Perform one step of the optimization

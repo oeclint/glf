@@ -1,4 +1,3 @@
-from retro_contest.local import make
 from collections import Mapping
 import numpy as np
 import logging
@@ -27,19 +26,27 @@ class Actions(Mapping):
 
 class Agent(object):
 
-    def __init__(self, actions, n_episodes=2500, env=None, game=None, state=None, record=None):
+    def __init__(self, actions, n_episodes=2500, env=None, game=None, state=None, record=None, render=False):
 
         self.actions = actions
         self.n_episodes = n_episodes
         self.game = game
         self.state = state
+        self.render = render
         if record is not None:
             self.record = True
+        else:
+            self.record = False
         self.path = record
-        self.env = env
+
+        if env is not None:
+            self.env = SonicEnvWrapper(env)
+        else:
+            self.env = env           
 
     def make(self):
         if self.env is None:
+            from retro_contest.local import make
             if self.record:
                 self.env = SonicEnvWrapper(make(game=self.game, state=self.state, bk2dir=self.path))
             else:
