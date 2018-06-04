@@ -151,8 +151,8 @@ class Model(object):
         action_batch = batch.as_tensor_cat('action')
         reward_batch = batch.as_tensor_cat('reward')
 
-        next_state_batch = next_state_batch.to(self.device).type('torch.FloatTensor')
-        state_batch = state_batch.to(self.device).type('torch.FloatTensor')
+        next_state_batch = next_state_batch.type('torch.FloatTensor').to(self.device)
+        state_batch = state_batch.type('torch.FloatTensor').to(self.device)
         
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of Actions taken
@@ -256,7 +256,7 @@ class Model(object):
             del env
 
     def select_action(self, state, agent):
-        state = torch.from_numpy(state).to(self.device).type('torch.FloatTensor')
+        state = torch.from_numpy(state).type('torch.FloatTensor').to(self.device)
         sample = np.random.random()
         eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * \
             np.exp(-1. * self.eps_step / self.eps_decay)
