@@ -73,11 +73,27 @@ class Model(object):
                  target_update = 10,
                  n_cat_states = 5,
                  n_actions = 7,
+                 policy = None,
                  log = None):
         
         policy_model = ConvNet(n_cat_states * 3, n_actions)
         target_model = ConvNet(n_cat_states * 3, n_actions)
 
+        if policy is not None:
+            # If policy exists only optimize last layer
+            policy_model.load_state_dict(torch.load(policy))
+            # Need to set requires_grad = False to freeze the paramenters so that the
+            # gradients are not computed in backward()
+            for param in policy_model.parameters():
+                param.required_grad = False
+            num_ftrs = policy_model.fc2.in_features
+            # Parameters of newly constructed modules have requires_grad=True by default
+            policy_model.fc2 = nn.Linear(num_ftrs, n_actions)
+            # Set parameters to only last
+            self.policy_net_parameters = policy_model.fc2.parameters()
+        else:
+            self.policy_net_parameters = policy_model.parameters()
+            
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         if torch.cuda.device_count() > 1:
@@ -92,7 +108,7 @@ class Model(object):
         target_net.eval()
         self.target_net = target_net
         
-        self.optimizer = optim.RMSprop(self.policy_net.parameters())
+        self.optimizer = optim.RMSprop(self.policy_net_parameters)
         self.memory = ReplayMemory(capacity)
         
         self.batch_size = batch_size
@@ -145,7 +161,7 @@ class Model(object):
         # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
-        for param in self.policy_net.parameters():
+        for param in self.policy_net_parameters:
            param.grad.data.clamp_(-1, 1)
         self.optimizer.step()
 
@@ -155,12 +171,10 @@ class Model(object):
             
             if not len(agent.actions)==self._n_actions:
                 raise ValueError("Expected agent to have {0} action(s)".format(str(self._n_actions)))
-            
-            if agent.record:
-                env = SonicEnvWrapper(make(game=agent.game, state=agent.state, bk2dir=agent.path))
-            else:
-                env = SonicEnvWrapper(make(game=agent.game, state=agent.state))
-                
+
+            agent.make()
+            env = agent.env
+                            
             for i_episode in range(agent.n_episodes):
                 if self.log is not None:
                     self.log.info("-->game: {game:<30}".format(game=agent.game))
@@ -221,7 +235,6 @@ class Model(object):
                         # Perform one step of the optimization
                         self.optimize()
                         if done:
-                            self.save_policy("{0}_{1}.p".format(agent.game,agent.state))
                             break
 
                     else:
