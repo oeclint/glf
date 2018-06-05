@@ -91,7 +91,7 @@ class Model(object):
             # Need to set requires_grad = False to freeze the paramenters so that the
             # gradients are not computed in backward()
             for param in policy_model.parameters():
-                param.required_grad = False
+                param.requires_grad = False
             num_ftrs = policy_model.fc2.in_features
             # Parameters of newly constructed modules have requires_grad=True by default
             policy_model.fc2 = nn.Linear(num_ftrs, n_actions)
