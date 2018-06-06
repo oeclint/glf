@@ -253,6 +253,7 @@ class Model(object):
         self.eps_step = self.eps_step + 1
         if sample > eps_threshold:
             with torch.no_grad():
+                # get index of action with highest quality
                 return self.policy_net(state).max(1)[1].view(1, 1)
         else:
             return torch.tensor([[np.random.randint(
