@@ -1,7 +1,7 @@
 import retro
 import glob
 
-for f in glob.glob('*SpringYardZone*009.bk2'):
+for f in glob.glob('*SpringYardZone*025.bk2'):
     movie = retro.Movie(f)
     movie.step()
 
@@ -14,4 +14,7 @@ for f in glob.glob('*SpringYardZone*009.bk2'):
         for i in range(env.NUM_BUTTONS):
             keys.append(movie.get_key(i))
         _obs, _rew, _done, _info = env.step(keys)
-        env.render()
+        if _done:
+            env.close()
+        else:
+            env.render()

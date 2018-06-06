@@ -154,8 +154,8 @@ class Model(object):
         next_state_batch = next_state_batch.type('torch.FloatTensor').to(self.device)
         state_batch = state_batch.type('torch.FloatTensor').to(self.device)
         
-        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-        # columns of Actions taken
+        # Compute Q(s_t, a), the model computes Q(s_t), then we select the
+        # columns of actions taken
         state_action_values = self.policy_net(state_batch).gather(1, action_batch)
 
         # Compute V(s_{t+1}) for all next states.
@@ -243,7 +243,7 @@ class Model(object):
                 if i_episode % self.target_update == 0:
                     self.target_net.load_state_dict(self.policy_net.state_dict())
                     
-            del env
+            env.close()
 
     def select_action(self, state, agent):
         state = torch.from_numpy(state).type('torch.FloatTensor').to(self.device)
