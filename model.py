@@ -151,8 +151,8 @@ class Model(object):
         action_batch = batch.as_tensor_cat('action')
         reward_batch = batch.as_tensor_cat('reward')
 
-        next_state_batch = next_state_batch.to(self.device).type('torch.FloatTensor')
-        state_batch = state_batch.to(self.device).type('torch.FloatTensor')
+        next_state_batch = next_state_batch.type('torch.FloatTensor').to(self.device)
+        state_batch = state_batch.type('torch.FloatTensor').to(self.device)
         
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of Actions taken
@@ -197,7 +197,6 @@ class Model(object):
                 state_cat=np.concatenate(states, axis=1)
                 
                 next_states = deque(maxlen=self.n_cat_states)
-                rewards = deque(maxlen=20)
                 
                 for t in count():
                     # Select and perform an action
@@ -210,15 +209,6 @@ class Model(object):
                         self.log.info(
                             "---->step: {step:>7}; action: {action:>1}; xpos: {xpos:>5}; reward: {reward:>5}; time: {time}".format(
                                 step=t, action=str(action_id), xpos=str(info['x']), reward="{0:.2f}".format(reward), time=time))
-
-                    rewards.append(reward)
-                    
-                    if len(rewards)==20:
-                        if all([rew<0.01 for rew in rewards]):
-                            # if rewards are bad for 20 steps then take more random guesses
-                            if self.eps_start < 0.20:
-                                self.eps_start = 0.20
-                            self.eps_step = 0
                             
                     reward = torch.tensor([reward], device=self.device)
 
@@ -256,7 +246,7 @@ class Model(object):
             del env
 
     def select_action(self, state, agent):
-        state = torch.from_numpy(state).to(self.device).type('torch.FloatTensor')
+        state = torch.from_numpy(state).type('torch.FloatTensor').to(self.device)
         sample = np.random.random()
         eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * \
             np.exp(-1. * self.eps_step / self.eps_decay)
