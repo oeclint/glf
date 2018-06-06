@@ -60,15 +60,15 @@ class NetPlus(nn.Module):
     the output is the quality of each action in the given state.
     """
     
-    def __init__(self,g_size=10,latent_size=128,key_size=64,num_input_frames=5):
+    def __init__(self,g_size=20,latent_size=128,key_size=128,num_input_frames=25):
         super(NetPlus, self).__init__()
 
         #this is the original code
-        self.conv1 = nn.Conv2d(num_input_frames*3, 64, kernel_size=5, stride=2,dilation=2)
-        self.bn1 = nn.BatchNorm2d(64)
-        self.conv2 = nn.Conv2d(64, 64, kernel_size=5, stride=2,dilation=2)
-        self.bn2 = nn.BatchNorm2d(64)
-        self.conv3 = nn.Conv2d(64, 64, kernel_size=5, stride=2,dilation=2)
+        self.conv1 = nn.Conv2d(num_input_frames*3, 256, kernel_size=5, stride=2,dilation=2)
+        self.bn1 = nn.BatchNorm2d(256)
+        self.conv2 = nn.Conv2d(256, 256, kernel_size=5, stride=2,dilation=2)
+        self.bn2 = nn.BatchNorm2d(256)
+        self.conv3 = nn.Conv2d(256, 64, kernel_size=5, stride=2,dilation=2)
         self.bn3 = nn.BatchNorm2d(64)
         self.conv4 = nn.Conv2d(64+1,512,kernel_size=5,stride=2)
         self.bn4 = nn.BatchNorm2d(512)
@@ -77,7 +77,7 @@ class NetPlus(nn.Module):
        
 
 
-        self.G = nn.Parameters(torch.randn(latent_size,g_size))
+        self.G = nn.Parameter(torch.randn(key_size,g_size))
 
         self.key_size = key_size
 
@@ -88,7 +88,7 @@ class NetPlus(nn.Module):
         #key generation neural network
         self.key_gen = nn.Sequential(wn(nn.Linear(latent_size,latent_size)),nn.ELU(),wn(nn.Linear(latent_size,latent_size)),nn.ELU(),wn(nn.Linear(latent_size,key_size)))
         #output neural network
-        self.output = nn.Sequential(wn(nn.Linear(latent_size+key_size,latent_size)),nn.ELU(),wn(nn.Linear(latent_size,latent_size)),nn.ELU(),wn(nn.Linear(latent_size,10)))
+        self.output = nn.Sequential(wn(nn.Linear(latent_size,latent_size)),nn.ELU(),wn(nn.Linear(latent_size,latent_size)),nn.ELU(),wn(nn.Linear(latent_size,10)))
         self.fuse = nn.Linear(latent_size+key_size,latent_size)
     
     def image_features(self, x):
@@ -106,23 +106,26 @@ class NetPlus(nn.Module):
         latent_vector = self.image_features(x)
 
         combination = latent_vector#torch.cat([latent_vector,torch.ones(x.size(0),self.key_size).to(x.device)],dim=1)
+	
+        G = self.G
 
         #this part stays dormant until you pass a G
         if G is not None:
 
             #generate a look-up key for the G memory. add an extra book-keeping dimension
-            key = self.key_gen(latent_vector).unsqueeze_(1)
+            key = self.key_gen(latent_vector).unsqueeze(1).view(x.size(0),1,G.size(0))
 
             #add a batch dimension -- just a little bit of dimensional resizing
-            G_expand = G.expand((key.size(0),key.size(1),G.size(1)))
+            G_expand = G.expand((key.size(0),G.size(0),G.size(1)))
 
             #dot the key into memory
-            weights = torch.bmm(key,G_memory).view(-1,G.size(1)) 
+            weights = torch.bmm(key,G_expand).view(x.size(0),G.size(1)) 
             #take softmax to get weights for each entry in the memory (the lookup)
-            weights = F.softmax(weights,dim=1).view(-1,1,G.size(1)) 
+            weights = F.softmax(weights,dim=1).view(x.size(0),1,G.size(1)) 
 
             #do a weighted sum of all of the columns
-            value = torch.sum(G_expand*weights,dim=2).view(-1,G.size(1))
+            value = G.size(1)*F.adaptive_avg_pool1d(G_expand*weights.expand(x.size(0),G.size(0),G.size(1)),1)
+            value = value.view(x.size(0),G.size(0))
 
             #combine the result of the lookup with the latent state vector
             combination = torch.cat([latent_vector,value],dim=1)
@@ -141,13 +144,13 @@ class Model(object):
     """
     
     def __init__(self, agents, capacity=1000000,
-                 batch_size = 64,
+                 batch_size = 8*4,
                  gamma = 0.999,
                  eps_start = 0.9,
                  eps_end = 0.05,
                  eps_decay = 200,
                  target_update = 10,
-                 n_cat_states = 5,
+                 n_cat_states = 25,
                  log = None):
         
         self.agents = agents
