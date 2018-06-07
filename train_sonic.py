@@ -33,6 +33,7 @@ class Agent(object):
         self.game = game
         self.state = state
         self.render = render
+        
         if record is not None:
             self.record = True
         else:
@@ -52,15 +53,6 @@ class Agent(object):
             else:
                 self.env = SonicEnvWrapper(make(game=self.game, state=self.state))
     
-#    def run(self):
-#        for _ in range(self.n_episodes):
-#            done = False
-#            obs = self.env.reset()
-#            while not done:
-#                next_obs, reward, done, info = self.env.step(self.actions.sample())
-#                if not self.record:
-#                    self.env.render()
-
 if __name__ == '__main__':
 
     """
@@ -70,6 +62,7 @@ if __name__ == '__main__':
     
     However, some actions are redundant. Only 7 unique actions are used by this object.
     """
+    
     actions = Actions({
         0: [0,0,0,0,0,1,0,0,0,0,0,0], # DOWN
         1: [0,0,0,0,0,0,1,0,0,0,0,0], # LEFT
@@ -82,11 +75,14 @@ if __name__ == '__main__':
 
     agents = []
 
-    dictReader = csv.DictReader(open('sonic-train.csv', 'r'), fieldnames = ['game', 'state'], delimiter = ',', quotechar = '"')
+    dictReader = csv.DictReader(open('sonic-train.csv', 'r'),
+                                fieldnames = ['game', 'state'],
+                                delimiter = ',', quotechar = '"')
+    
     for i,row in enumerate(dictReader):
         if i != 0:
             #skip header
-            directory = "recordings_{0}_{1}".format(row['game'],row['state'])
+            directory = "recordings"
             if not os.path.exists(directory):
                 os.makedirs(directory)
             ag = Agent(actions,game=row['game'],state=row['state'],record=directory)

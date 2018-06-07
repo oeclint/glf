@@ -91,7 +91,7 @@ class Model(object):
             # Need to set requires_grad = False to freeze the paramenters so that the
             # gradients are not computed in backward()
             for param in policy_model.parameters():
-                param.required_grad = False
+                param.requires_grad = False
             num_ftrs = policy_model.fc2.in_features
             # Parameters of newly constructed modules have requires_grad=True by default
             policy_model.fc2 = nn.Linear(num_ftrs, n_actions)
@@ -154,8 +154,8 @@ class Model(object):
         next_state_batch = next_state_batch.type('torch.FloatTensor').to(self.device)
         state_batch = state_batch.type('torch.FloatTensor').to(self.device)
         
-        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-        # columns of Actions taken
+        # Compute Q(s_t, a), the model computes Q(s_t), then we select the
+        # columns of actions taken
         state_action_values = self.policy_net(state_batch).gather(1, action_batch)
 
         # Compute V(s_{t+1}) for all next states.
@@ -243,7 +243,7 @@ class Model(object):
                 if i_episode % self.target_update == 0:
                     self.target_net.load_state_dict(self.policy_net.state_dict())
                     
-            del env
+            env.close()
 
     def select_action(self, state, agent):
         state = torch.from_numpy(state).type('torch.FloatTensor').to(self.device)
@@ -253,6 +253,7 @@ class Model(object):
         self.eps_step = self.eps_step + 1
         if sample > eps_threshold:
             with torch.no_grad():
+                # get index of action with highest quality
                 return self.policy_net(state).max(1)[1].view(1, 1)
         else:
             return torch.tensor([[np.random.randint(
