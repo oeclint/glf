@@ -4,8 +4,7 @@ from gym.spaces.box import Box
 import numpy as np
 from collections import deque
 
-
-def process_obs(obs):
+class SonicObsWrapper(gym.ObservationWrapper):
     """
     Each timestep advances the game by 4 frames, and each observation 
     is the pixels on the screen for the current frame, a shape (224, 320, 3) 
@@ -26,19 +25,6 @@ def process_obs(obs):
 
     Therefore, the axes of the observation pixel array need to be re-arranged.
     """
-
-    # move last axis (C) to the first position
-    obs = np.moveaxis(obs,-1,0)
-
-    return obs
-
-class SonicObsWrapper(gym.ObservationWrapper):
-    """
-    Use deltas in max(X) as the reward, rather than deltas
-    in X. This way, agents are not discouraged too heavily
-    from exploring backwards if there is no way to advance
-    head-on in the level.
-    """
     def __init__(self, env=None):
         super(SonicObsWrapper, self).__init__(env)
         obs_shape = self.observation_space.shape
@@ -49,7 +35,8 @@ class SonicObsWrapper(gym.ObservationWrapper):
             dtype=self.observation_space.dtype)
         
     def observation(self, observation):
-        return process_obs(observation)
+        # move last axis to first
+        return np.moveaxis(observation,-1,0)
 
 class SonicDiscretizer(gym.ActionWrapper):
     """

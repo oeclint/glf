@@ -1,5 +1,5 @@
 ./retro-contest
-*.bk2
+*.bk2*
 .DS_Store
 *.txt
 *recordings_*
