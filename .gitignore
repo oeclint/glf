@@ -8,3 +8,5 @@
 __pycache__
 contest_submission
 *.p
+log
+trained_models
