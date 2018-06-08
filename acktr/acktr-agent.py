@@ -27,7 +27,6 @@ if __name__ == '__main__':
     num_processes = 16
     cuda = False
     num_frames = 10e6
-    num_updates = int(num_frames) // num_steps // num_processes
     log_dir = 'log'
     seed = 1
     use_gae = False
@@ -42,10 +41,13 @@ if __name__ == '__main__':
     game='SonicTheHedgehog-Genesis'
     state='LabyrinthZone.Act2'
     
-#    envs = make(game='SonicTheHedgehog-Genesis', state='LabyrinthZone.Act2')
-#    envs = SonicDiscretizer(envs)
-#    envs = SonicObsWrapper(envs)
+    num_updates = int(num_frames) // num_steps // num_processes
 
+    torch.manual_seed(seed)
+    
+    if cuda:
+        torch.cuda.manual_seed(seed)
+        
     torch.set_num_threads(1)
 
     if vis:

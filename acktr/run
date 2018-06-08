@@ -5,4 +5,5 @@
 #SBATCH -N 1
 #SBATCH -J sonic
 #SBATCH -e errors.txt
+mkdir -p log
 python acktr-agent.py
