@@ -144,7 +144,7 @@ class Model(object):
     """
     
     def __init__(self, agents, capacity=1000000,
-                 batch_size = 8*4,
+                 batch_size = 8*2,
                  gamma = 0.999,
                  eps_start = 0.9,
                  eps_end = 0.05,
@@ -155,8 +155,8 @@ class Model(object):
         
         self.agents = agents
         
-        policy_model = NetPlus(n_cat_states * 3)
-        target_model = NetPlus(n_cat_states * 3)
+        policy_model = NetPlus(n_cat_states )
+        target_model = NetPlus(n_cat_states )
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
