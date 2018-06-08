@@ -1,6 +1,9 @@
 import gym
+from gym.spaces.box import Box
+
 import numpy as np
 from collections import deque
+
 
 def process_obs(obs):
     """
@@ -24,33 +27,29 @@ def process_obs(obs):
     Therefore, the axes of the observation pixel array need to be re-arranged.
     """
 
-    # add new axis at the beginning (N)
-    obs = obs[np.newaxis]
-    # move last axis (C) to the second position
-    obs = np.moveaxis(obs,-1,1)
+    # move last axis (C) to the first position
+    obs = np.moveaxis(obs,-1,0)
 
     return obs
 
-class SonicEnvWrapper(gym.Wrapper):
+class SonicObsWrapper(gym.ObservationWrapper):
     """
     Use deltas in max(X) as the reward, rather than deltas
     in X. This way, agents are not discouraged too heavily
     from exploring backwards if there is no way to advance
     head-on in the level.
     """
-    def __init__(self, env):
-        super(SonicEnvWrapper, self).__init__(env)
-
-    def reset(self, **kwargs):
-        obs = self.env.reset(**kwargs)
-        return process_obs(obs)
-
-    def step(self, action):
-        obs, rew, done, info = self.env.step(action)
-        # Don't punish too much for going back
-        if rew < 0:
-            rew = rew * 0.33
-        return process_obs(obs), rew, done, info
+    def __init__(self, env=None):
+        super(SonicObsWrapper, self).__init__(env)
+        obs_shape = self.observation_space.shape
+        self.observation_space = Box(
+            self.observation_space.low[0, 0, 0],
+            self.observation_space.high[0, 0, 0],
+            [obs_shape[2], obs_shape[0], obs_shape[1]],
+            dtype=self.observation_space.dtype)
+        
+    def observation(self, observation):
+        return process_obs(observation)
 
 class SonicDiscretizer(gym.ActionWrapper):
     """

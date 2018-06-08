@@ -6,5 +6,5 @@
 *~
 *.out
 __pycache__
-dqn_agent
+contest_submission
 *.p
