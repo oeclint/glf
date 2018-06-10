@@ -34,7 +34,8 @@ if __name__ == '__main__':
     tau = 0.95
     vis_interval = 100
     log_interval = 10
-    save_path = 'trained_models'
+    save_interval = 100
+    save_dir = 'trained_models'
     algo = 'acktr'
     port = 8097
     
