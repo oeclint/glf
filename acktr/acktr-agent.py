@@ -93,7 +93,8 @@ if __name__ == '__main__':
     agent = A2C_ACKTR(
         actor_critic,
         value_loss_coef,
-        entropy_coef)
+        entropy_coef,
+        acktr=True)
 
     rollouts = RolloutStorage(num_steps, num_processes, obs_shape, envs.action_space, actor_critic.state_size)
     current_obs = torch.zeros(num_processes, *obs_shape)
