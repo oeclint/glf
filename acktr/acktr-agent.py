@@ -25,7 +25,7 @@ if __name__ == '__main__':
     entropy_coef = 0.01
     num_steps = 20
     num_processes = 16
-    cuda = False
+    cuda = True
     num_frames = 10e6
     log_dir = 'log'
     seed = 1
@@ -88,7 +88,7 @@ if __name__ == '__main__':
     obs_shape = envs.observation_space.shape
     obs_shape = (obs_shape[0] * num_stack, *obs_shape[1:])
 
-    actor_critic = Policy(obs_shape, envs.action_space, recurrent_policy)
+    actor_critic = Policy(obs_shape, envs.action_space, recurrent_policy, cuda=True)
 
     agent = A2C_ACKTR(
         actor_critic,

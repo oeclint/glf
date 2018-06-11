@@ -11,7 +11,7 @@ class Flatten(nn.Module):
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_shape, action_space, recurrent_policy):
+    def __init__(self, obs_shape, action_space, recurrent_policy, cuda=False):
         super(Policy, self).__init__()
         if len(obs_shape) == 3:
             self.base = CNNBase(obs_shape[0], recurrent_policy)
@@ -32,6 +32,9 @@ class Policy(nn.Module):
             raise NotImplementedError
 
         self.state_size = self.base.state_size
+        if cuda:
+            self.base.cuda()
+            self.dist.cuda()
 
     def forward(self, inputs, states, masks):
         raise NotImplementedError
