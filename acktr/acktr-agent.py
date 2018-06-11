@@ -7,7 +7,7 @@ from sonic_util import SonicDiscretizer, SonicObsWrapper
 import torch
 import numpy as np
 
-from acktr import ACKTR
+from a2c_acktr import A2C_ACKTR
 from model import Policy
 from storage import RolloutStorage
 from baselines import bench
@@ -90,7 +90,7 @@ if __name__ == '__main__':
 
     actor_critic = Policy(obs_shape, envs.action_space, recurrent_policy)
 
-    agent = ACKTR(
+    agent = A2C_ACKTR(
         actor_critic,
         value_loss_coef,
         entropy_coef)

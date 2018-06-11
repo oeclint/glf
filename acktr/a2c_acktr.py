@@ -2,10 +2,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from kfac import KFACOptimizer
+from .kfac import KFACOptimizer
 
 
-class ACKTR(object):
+class A2C_ACKTR(object):
     def __init__(self,
                  actor_critic,
                  value_loss_coef,
@@ -13,16 +13,22 @@ class ACKTR(object):
                  lr=None,
                  eps=None,
                  alpha=None,
-                 max_grad_norm=None):
+                 max_grad_norm=None,
+                 acktr=False):
 
         self.actor_critic = actor_critic
+        self.acktr = acktr
 
         self.value_loss_coef = value_loss_coef
         self.entropy_coef = entropy_coef
 
         self.max_grad_norm = max_grad_norm
 
-        self.optimizer = KFACOptimizer(actor_critic)
+        if acktr:
+            self.optimizer = KFACOptimizer(actor_critic)
+        else:
+            self.optimizer = optim.RMSprop(
+                actor_critic.parameters(), lr, eps=eps, alpha=alpha)
 
     def update(self, rollouts):
         obs_shape = rollouts.observations.size()[2:]
@@ -43,7 +49,7 @@ class ACKTR(object):
 
         action_loss = -(advantages.detach() * action_log_probs).mean()
 
-        if self.optimizer.steps % self.optimizer.Ts == 0:
+        if self.acktr and self.optimizer.steps % self.optimizer.Ts == 0:
             # Sampled fisher, see Martens 2014
             self.actor_critic.zero_grad()
             pg_fisher_loss = -action_log_probs.mean()
@@ -63,6 +69,10 @@ class ACKTR(object):
         self.optimizer.zero_grad()
         (value_loss * self.value_loss_coef + action_loss -
          dist_entropy * self.entropy_coef).backward()
+
+        if self.acktr == False:
+            nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
+                                     self.max_grad_norm)
 
         self.optimizer.step()
 

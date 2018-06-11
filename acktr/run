@@ -4,6 +4,7 @@
 #SBATCH -t 140:00:00
 #SBATCH -N 1
 #SBATCH -J sonic
-#SBATCH -e errors.txt
+#SBATCH -o stdout.txt
+#SBATCH -e stderr.txt
 mkdir -p log
 python acktr-agent.py
