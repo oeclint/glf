@@ -1,3 +1,4 @@
+import copy
 import time
 import os
 
@@ -88,13 +89,16 @@ if __name__ == '__main__':
     obs_shape = envs.observation_space.shape
     obs_shape = (obs_shape[0] * num_stack, *obs_shape[1:])
 
-    actor_critic = Policy(obs_shape, envs.action_space, recurrent_policy, cuda=True)
+    actor_critic = Policy(obs_shape, envs.action_space, recurrent_policy, cuda=cuda)
 
     agent = A2C_ACKTR(
         actor_critic,
         value_loss_coef,
         entropy_coef,
-        acktr=True)
+        lr = 0.01,
+        alpha = 0.99,
+        eps = 1e-8,
+        max_grad_norm = 1.0 )
 
     rollouts = RolloutStorage(num_steps, num_processes, obs_shape, envs.action_space, actor_critic.state_size)
     current_obs = torch.zeros(num_processes, *obs_shape)
