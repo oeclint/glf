@@ -3,23 +3,10 @@ import os
 import json
 from retro_contest.local import make
 
-def to_json(o):
-    str_out = []
-    s4 = '    '
-    s8 = s4*2
-    for k, v in o.items():
-        kv=''
-        kv += '{}"{}":\n'.format(s4,k)
-        f = (s8+'[{}]\n').format( "{},\n " + (s8 + "{},\n ")*(len(v)-2) + s8 + "{}")
-        kv += f.format(*v)
-        str_out.append(kv)
-
-    return "{{\n{}}}".format(','.join(str_out))
-
 class PlayBack(object):
 
     def __init__(self, game, state, root='../play_sonic/human', scenario='contest'):
-        self.bk2_path = os.path.join(root,game,scenario,'-'.join([game,state]))
+        self.path = os.path.join(root,game,scenario)
         self.game = game
         self.state = state
 
@@ -27,7 +14,7 @@ class PlayBack(object):
 
         keysdict = {}
 
-        for f in glob.glob(self.bk2_path+'*.bk2'):
+        for f in glob.glob(os.path.join(self.path,'{}-{}*.bk2'.format(game,state))):
 
             movie = retro.Movie(f)
             movie.step()
@@ -62,21 +49,22 @@ class PlayBack(object):
 
     def play_json(self, render=True):
 
-        with open('{}-{}.json'.format(self.game,self.state)) as f:
+        with open(os.path.join(self.path,'{}-{}.json'.format(self.game,self.state))) as f:
             data = json.load(f)
 
         env = make(game=self.game, state=self.state)
-        obs = env.reset()
+        #obs = env.reset()
         for ep in data:
+            obs = env.reset()
             for action in data[ep]:
                 obs, rew, done, info = env.step(action)
                 env.render()
                 if done:
-                    obs = env.reset()
+                    #obs = env.reset()
                     break
         
 
 if __name__ == '__main__':
     p = PlayBack('SonicTheHedgehog-Genesis','SpringYardZone.Act3')
-    p.play_bk2()
-  #  p.play_json()
+  #  p.play_bk2()
+    p.play_json()
