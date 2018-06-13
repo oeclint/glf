@@ -1,4 +1,4 @@
-./retro-contest
+*.json
 *.bk2*
 .DS_Store
 *.txt

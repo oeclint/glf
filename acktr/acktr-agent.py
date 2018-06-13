@@ -95,10 +95,10 @@ if __name__ == '__main__':
         actor_critic,
         value_loss_coef,
         entropy_coef,
-        lr = 0.01,
+        lr = 7e-4,
         alpha = 0.99,
-        eps = 1e-8,
-        max_grad_norm = 1.0 )
+        eps = 1e-5,
+        max_grad_norm = 0.5 )
 
     rollouts = RolloutStorage(num_steps, num_processes, obs_shape, envs.action_space, actor_critic.state_size)
     current_obs = torch.zeros(num_processes, *obs_shape)
