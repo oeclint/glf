@@ -10,7 +10,8 @@ from pyglet.window import key as keycodes
 from pyglet.gl import *
 
 import retro
-
+from glf.common.parse import to_json
+import json
 # TODO:
 # indicate to user when episode is over (hard to do without save/restore lua state)
 # record bk2 directly
@@ -42,6 +43,7 @@ def main():
     parser.add_argument('--game', help='retro game to use')
     parser.add_argument('--state', help='retro state to start from')
     parser.add_argument('--scenario', help='scenario to use', default='scenario')
+    parser.add_argument('--out', help='output type (json or bk2)', default='json')
     args = parser.parse_args()
 
     if args.game is None:
@@ -141,24 +143,50 @@ def main():
                 env.em.set_state(save_state)
 
         if keycodes.ESCAPE in keys_pressed or buttoncodes.XBOX in buttons_clicked:
-            # record all the actions so far to a bk2 and exit
-            i = 0
-            while True:
-                movie_filename = 'human/%s/%s/%s-%s-%04d.bk2' % (args.game, args.scenario, args.game, args.state, i)
-                if not os.path.exists(movie_filename):
-                    break
-                i += 1
-            os.makedirs(os.path.dirname(movie_filename), exist_ok=True)
-            env.record_movie(movie_filename)
-            env.reset()
-            for step, act in enumerate(recorded_actions):
-                if step % 1000 == 0:
-                    print('saving %d/%d' % (step, len(recorded_actions)))
-                env.step(act)
-            env.stop_record()
-            print('complete')
-            sys.exit(1)
+            
+            if args.out != 'json':
+                # record all the actions so far to a bk2 and exit
+                i = 0
+                while True:
+                    movie_filename = 'human/%s/%s/%s-%s-%04d.bk2' % (args.game, args.scenario, args.game, args.state, i)
+                    if not os.path.exists(movie_filename):
+                        break
+                    i += 1
+                os.makedirs(os.path.dirname(movie_filename), exist_ok=True)
+                env.record_movie(movie_filename)
+                env.reset()
+                for step, act in enumerate(recorded_actions):
+                    if step % 1000 == 0:
+                        print('saving %d/%d' % (step, len(recorded_actions)))
+                    env.step(act)
+                env.stop_record()
+                print('complete')
+                sys.exit(1)
 
+            else:
+
+                json_filename = 'human/{}/{}/{}-{}.json'.format(
+                    args.game, args.scenario, args.game, args.state)
+                if not os.path.exists(json_filename):
+                    os.makedirs(os.path.dirname(json_filename),exist_ok=True)
+                    with open(json_filename,'w') as f:
+                        f.write('{}')
+
+                with open(json_filename) as f:
+                    json_actions = json.load(f)
+                    
+                i = 0
+                while True:
+                    ep = i
+                    if str(i) not in json_actions:
+                        break
+                    i += 1
+                    
+                json_actions[ep] = recorded_actions
+                with open(json_filename, 'w') as f:
+                     f.write(to_json(json_actions))
+                sys.exit(1)
+            
         inputs = {
             'A': keycodes.Z in keys_pressed or buttoncodes.A in buttons_pressed,
             'B': keycodes.X in keys_pressed or buttoncodes.B in buttons_pressed,
@@ -175,7 +203,7 @@ def main():
             'MODE': keycodes.TAB in keys_pressed or buttoncodes.SELECT in buttons_pressed,
             'START': keycodes.ENTER in keys_pressed or buttoncodes.START in buttons_pressed,
         }
-        action = [inputs[b] for b in env.BUTTONS]
+        action = [int(inputs[b]) for b in env.BUTTONS]
 
         if steps % SAVE_PERIOD == 0:
             recorded_states.append((steps, env.em.get_state()))

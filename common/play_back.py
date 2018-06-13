@@ -1,11 +1,12 @@
 import glob
 import os
 import json
-from retro_contest.local import make
+from retro_contest.local import make as contest_make
+from retro import make
 
 class PlayBack(object):
 
-    def __init__(self, game, state, root='../play_sonic/human', scenario='contest'):
+    def __init__(self, game, state, root='../play_sonic/human', scenario='scenario'):
         self.path = os.path.join(root,game,scenario)
         self.game = game
         self.state = state
@@ -47,24 +48,22 @@ class PlayBack(object):
             with open('{}-{}.json'.format(self.game,self.state), 'w') as outfile:
                  outfile.write(to_json(keysdict))
 
-    def play_json(self, render=True):
+    def play_json(self, maker, render=True):
 
         with open(os.path.join(self.path,'{}-{}.json'.format(self.game,self.state))) as f:
             data = json.load(f)
 
-        env = make(game=self.game, state=self.state)
-        #obs = env.reset()
+        env = maker(game=self.game, state=self.state)
         for ep in data:
             obs = env.reset()
             for action in data[ep]:
                 obs, rew, done, info = env.step(action)
                 env.render()
                 if done:
-                    #obs = env.reset()
                     break
         
 
 if __name__ == '__main__':
     p = PlayBack('SonicTheHedgehog-Genesis','SpringYardZone.Act3')
   #  p.play_bk2()
-    p.play_json()
+    p.play_json(make)
