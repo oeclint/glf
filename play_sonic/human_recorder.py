@@ -42,7 +42,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--game', help='retro game to use')
     parser.add_argument('--state', help='retro state to start from')
-    parser.add_argument('--scenario', help='scenario to use', default='scenario')
+    parser.add_argument('--scenario', help='scenario to use', default='contest')
     parser.add_argument('--out', help='output type (json or bk2)', default='json')
     args = parser.parse_args()
 

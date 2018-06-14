@@ -3,13 +3,15 @@ import os
 import json
 from retro_contest.local import make as contest_make
 from retro import make
+import argparse
 
 class PlayBack(object):
 
-    def __init__(self, game, state, root='../play_sonic/human', scenario='scenario'):
+    def __init__(self, game, state, scenario, root='human'):
         self.path = os.path.join(root,game,scenario)
         self.game = game
         self.state = state
+        self.scenario = scenario
 
     def play_bk2(self, render=False, write=True):
 
@@ -53,7 +55,7 @@ class PlayBack(object):
         with open(os.path.join(self.path,'{}-{}.json'.format(self.game,self.state))) as f:
             data = json.load(f)
 
-        env = maker(game=self.game, state=self.state)
+        env = maker(game=self.game, state=self.state, scenario=self.scenario)
         for ep in data:
             obs = env.reset()
             for action in data[ep]:
@@ -64,6 +66,11 @@ class PlayBack(object):
         
 
 if __name__ == '__main__':
-    p = PlayBack('SonicTheHedgehog-Genesis','SpringYardZone.Act3')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--game', help='retro game to use')
+    parser.add_argument('--state', help='retro state to start from')
+    parser.add_argument('--scenario', help='scenario to use', default='contest')
+    args = parser.parse_args()
+    p = PlayBack(game=args.game,state=args.state,scenario=args.scenario)
   #  p.play_bk2()
     p.play_json(make)
