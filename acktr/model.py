@@ -11,7 +11,7 @@ class Flatten(nn.Module):
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_shape, action_space, recurrent_policy, cuda=False):
+    def __init__(self, obs_shape, action_space, recurrent_policy, cuda=False, temp = 1):
         super(Policy, self).__init__()
         if len(obs_shape) == 3:
             self.base = CNNBase(obs_shape[0], recurrent_policy)
@@ -24,7 +24,7 @@ class Policy(nn.Module):
 
         if action_space.__class__.__name__ == "Discrete":
             num_outputs = action_space.n
-            self.dist = Categorical(self.base.output_size, num_outputs)
+            self.dist = Categorical(self.base.output_size, num_outputs, temp = temp)
         elif action_space.__class__.__name__ == "Box":
             num_outputs = action_space.shape[0]
             self.dist = DiagGaussian(self.base.output_size, num_outputs)
