@@ -30,7 +30,7 @@ FixedNormal.mode = lambda self: self.mean
 
 
 class Categorical(nn.Module):
-    def __init__(self, num_inputs, num_outputs):
+    def __init__(self, num_inputs, num_outputs,temp=1):
         super(Categorical, self).__init__()
 
         init_ = lambda m: init(m,
@@ -40,13 +40,15 @@ class Categorical(nn.Module):
 
         self.linear = init_(nn.Linear(num_inputs, num_outputs))
 
+        self.temp = temp
+
     def forward(self, x):
-        x = self.linear(x)
+        x = self.linear(x) / self.temp
         return FixedCategorical(logits=x)
 
 
 class DiagGaussian(nn.Module):
-    def __init__(self, num_inputs, num_outputs):
+    def __init__(self, num_inputs, num_outputs, temp=1):
         super(DiagGaussian, self).__init__()
 
         init_ = lambda m: init(m,
@@ -55,6 +57,7 @@ class DiagGaussian(nn.Module):
 
         self.fc_mean = init_(nn.Linear(num_inputs, num_outputs))
         self.logstd = AddBias(torch.zeros(num_outputs))
+        self.temp = temp
 
     def forward(self, x):
         action_mean = self.fc_mean(x)
@@ -64,5 +67,5 @@ class DiagGaussian(nn.Module):
         if x.is_cuda:
             zeros = zeros.cuda()
 
-        action_logstd = self.logstd(zeros)
+        action_logstd = self.logstd(zeros)/self.temp
         return FixedNormal(action_mean, action_logstd.exp())
