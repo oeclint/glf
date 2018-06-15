@@ -1,7 +1,9 @@
 def to_json(d):
+    
     str_out = []
     s4 = '    '
     s8 = s4*2
+
     for k, v in d.items():
         kv=''
         kv += '{}"{}":\n'.format(s4,k)
@@ -9,4 +11,4 @@ def to_json(d):
         kv += f.format(*v)
         str_out.append(kv)
 
-    return "{{\n{}}}".format(',\n'.join(str_out))
+    return "{{\n{}}}".format((s4+',\n').join(str_out))

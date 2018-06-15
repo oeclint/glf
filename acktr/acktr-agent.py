@@ -3,7 +3,7 @@ import time
 import os
 
 from retro_contest.local import make
-from sonic_util import SonicDiscretizer, SonicObsWrapper
+from glf.common.sonic_util import SonicDiscretizer, SonicObsWrapper
 
 import torch
 import numpy as np
