@@ -51,6 +51,7 @@ class PlayBack(object):
                  outfile.write(to_json(keysdict))
 
     def play_json(self, maker, render=True):
+        from glf.common.sonic_util import SonicActions
 
         with open(os.path.join(self.path,'{}-{}.json'.format(self.game,self.state))) as f:
             data = json.load(f)
@@ -58,7 +59,8 @@ class PlayBack(object):
         env = maker(game=self.game, state=self.state, scenario=self.scenario)
         for ep in data:
             obs = env.reset()
-            for action in data[ep]:
+            actions = SonicActions(data[ep])
+            for action in actions.data:
                 obs, rew, done, info = env.step(action)
                 env.render()
                 if done:

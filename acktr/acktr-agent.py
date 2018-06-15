@@ -3,7 +3,7 @@ import time
 import os
 
 from retro_contest.local import make
-from glf.common.sonic_util import SonicDiscretizer, SonicObsWrapper
+from glf.common.sonic_util import SonicActDiscretizer, SonicObsWrapper, AllowBacktracking
 
 import torch
 import numpy as np
@@ -70,6 +70,7 @@ if __name__ == '__main__':
 
             env = SonicDiscretizer(env)
             env = SonicObsWrapper(env)
+            env = AllowBacktracking(env)
 
             return env
         
