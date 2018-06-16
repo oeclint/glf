@@ -65,6 +65,15 @@ class PlayBack(object):
                 env.render()
                 if done:
                     break
+
+    def actions(self):
+        with open(os.path.join(self.path,'{}-{}.json'.format(self.game,self.state))) as f:
+            data = json.load(f)
+        for ep in data:
+            data[ep] = SonicActions(data[ep])
+
+        return data
+
         
 
 if __name__ == '__main__':
