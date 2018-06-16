@@ -95,7 +95,7 @@ class SonicActDiscretizer(gym.ActionWrapper):
         return cls(env, np.array(list(set(map(tuple, all_actions)))))
 
     def action(self, a):
-        if isinstance(a, Sequence):
+        if isinstance(a, (Sequence, np.ndarray)):
             a = self._indexer[tuple(a)]
         return self._actions[a].copy()
 
