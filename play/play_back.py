@@ -4,6 +4,7 @@ import json
 from retro_contest.local import make as contest_make
 from retro import make
 import argparse
+from glf.common.sonic_util import SonicActions
 
 class PlayBack(object):
 
@@ -51,7 +52,6 @@ class PlayBack(object):
                  outfile.write(to_json(keysdict))
 
     def play_json(self, maker, render=True):
-        from glf.common.sonic_util import SonicActions
 
         with open(os.path.join(self.path,'{}-{}.json'.format(self.game,self.state))) as f:
             data = json.load(f)

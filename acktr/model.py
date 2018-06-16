@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from distributions import Categorical, DiagGaussian
-from utils import init, init_normc_
+from glf.acktr.distributions import Categorical, DiagGaussian
+from glf.acktr.utils import init, init_normc_
 
 
 class Flatten(nn.Module):
