@@ -120,12 +120,48 @@ class SonicActions(Sequence):
                 if actions[same_as_ind[i]].any():
                     actions[same_as_ind[i]] = 0
                     actions[i] = 1
-
+                    
+    def pad_zeros(self,shape):
+        result = np.zeros(shape,'int')
+        result[:self.data.shape[0],:self.data.shape[1]]=self.data
+        return result
+        
+    def group_by(self,by):
+        r,c = self.data.shape
+        data = self.data
+        if r % by != 0:
+            while r % by != 0:
+                r = r+1
+            data = self.pad_zeros((r,c))
+        return data.reshape(int(r/by),by,c)  
+        
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, index):
         return self.data[index]
+
+class SonicActionsVec(object):
+
+    def __init__(self,actions):
+
+        self.actions = actions
+        self.row = max([s.data.shape[0] for s in actions])
+        self.col = actions[0].data.shape[1]
+
+        if not all([s.data.shape[1]==self.col for s in actions]):
+            raise ValueError('Expected all arrays to have same number of columns')
+
+    def stack_by(self,by):
+
+        arr = []
+        for action in self.actions:
+            if action.data.shape[0] < self.row:
+                action = SonicActions(action.pad_zeros((self.row, self.col)))
+            arr.append(action)
+
+        return np.stack([a.group_by(by) for a in arr],axis=2)
+
 
 class AllowBacktracking(gym.Wrapper):
     """
