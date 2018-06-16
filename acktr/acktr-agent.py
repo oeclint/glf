@@ -8,9 +8,10 @@ from glf.common.sonic_util import SonicActDiscretizer, SonicObsWrapper, AllowBac
 import torch
 import numpy as np
 
-from a2c_acktr import A2C_ACKTR
-from model import Policy
-from storage import RolloutStorage
+from glf.acktr.a2c_acktr import A2C_ACKTR
+from glf.acktr.model import Policy
+from glf.acktr.storage import RolloutStorage
+
 from baselines import bench
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
@@ -20,13 +21,13 @@ from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 if __name__ == '__main__':
 
     num_stack = 4
-    recurrent_policy = False
+    recurrent_policy = True
     vis = False
     value_loss_coef = 0.5
     entropy_coef = 0.01
     num_steps = 20
     num_processes = 16
-    cuda = True
+    cuda = torch.cuda.is_available()
     num_frames = 10e6
     log_dir = 'log'
     seed = 1
@@ -68,7 +69,7 @@ if __name__ == '__main__':
             if log_dir is not None:
                 env = bench.Monitor(env, os.path.join(log_dir, str(rank)))
 
-            env = SonicDiscretizer(env)
+            env = SonicActDiscretizer(env)
             env = SonicObsWrapper(env)
             env = AllowBacktracking(env)
 
