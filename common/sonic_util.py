@@ -66,6 +66,11 @@ class SonicActDiscretizer(gym.ActionWrapper):
         else:
             self._actions = actions
 
+        self._indexer = {}
+
+        for i, a in enumerate(self._actions):
+            self._indexer[tuple(a)] = i
+
         self.action_space = gym.spaces.Discrete(len(self._actions))
 
     @classmethod
@@ -90,6 +95,8 @@ class SonicActDiscretizer(gym.ActionWrapper):
         return cls(env, np.array(list(set(map(tuple, all_actions)))))
 
     def action(self, a):
+        if isinstance(a, Sequence):
+            a = self._indexer[tuple(a)]
         return self._actions[a].copy()
 
 class SonicActions(Sequence):
