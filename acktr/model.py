@@ -13,6 +13,7 @@ class Flatten(nn.Module):
 class Policy(nn.Module):
     def __init__(self, obs_shape, action_space, recurrent_policy, cuda=False, temp = 1):
         super(Policy, self).__init__()
+        self.obs_shape = obs_shape
         if len(obs_shape) == 3:
             self.base = CNNBase(obs_shape[0], recurrent_policy)
         elif len(obs_shape) == 1:
