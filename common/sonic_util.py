@@ -82,7 +82,7 @@ class SonicActDiscretizer(gym.ActionWrapper):
 
             for ep in data:
 
-                arr = SonicActions(data[ep])
+                arr = SonicActions.from_sonic_config(data[ep])
                 data[ep] = arr
 
                 all_actions+=arr.data.tolist()
