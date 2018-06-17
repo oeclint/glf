@@ -59,18 +59,22 @@ class PlayBack(object):
         env = maker(game=self.game, state=self.state, scenario=self.scenario)
         for ep in data:
             obs = env.reset()
-            actions = SonicActions(data[ep])
+            actions = SonicActions.from_sonic_config(data[ep])
             for action in actions.data:
                 obs, rew, done, info = env.step(action)
                 env.render()
                 if done:
                     break
 
-    def actions(self):
+    def actions(self, indexer=None):
         with open(os.path.join(self.path,'{}-{}.json'.format(self.game,self.state))) as f:
             data = json.load(f)
         for ep in data:
-            data[ep] = SonicActions(data[ep])
+            if indexer is None:
+                data[ep] = SonicActions.from_sonic_config(data[ep])
+            else:
+                s = SonicActions.from_sonic_config(data[ep])
+                data[ep] = s.map(indexer)
 
         return data
 

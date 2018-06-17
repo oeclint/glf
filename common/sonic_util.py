@@ -66,10 +66,10 @@ class SonicActDiscretizer(gym.ActionWrapper):
         else:
             self._actions = actions
 
-        self._indexer = {}
+        self._action_indexer = {}
 
         for i, a in enumerate(self._actions):
-            self._indexer[tuple(a)] = i
+            self._action_indexer[tuple(a)] = i
 
         self.action_space = gym.spaces.Discrete(len(self._actions))
 
@@ -95,18 +95,25 @@ class SonicActDiscretizer(gym.ActionWrapper):
         return cls(env, np.array(list(set(map(tuple, all_actions)))))
 
     def action(self, a):
-        if isinstance(a, (Sequence, np.ndarray)):
-            a = self._indexer[tuple(a)]
         return self._actions[a].copy()
 
 class SonicActions(Sequence):
 
     def __init__(self, arr,
-                    buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"],
-                    same_as = {'B':['B','A','C']},
-                    inactive = ["MODE", "START", "Y", "X", "Z"]):
+                    buttons = None,
+                    same_as = None,
+                    inactive = None):
 
         super(SonicActions, self).__init__()
+
+        if buttons is None:
+            buttons = []
+
+        if same_as is None:
+            same_as = {}
+
+        if inactive is None:
+            inactive = []
 
         self.data = np.array(arr)
 
@@ -127,6 +134,13 @@ class SonicActions(Sequence):
                 if actions[same_as_ind[i]].any():
                     actions[same_as_ind[i]] = 0
                     actions[i] = 1
+
+    @classmethod
+    def from_sonic_config(cls, arr):
+        return cls( arr,
+                    buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"],
+                    same_as = {'B':['B','A','C']},
+                    inactive = ["MODE", "START", "Y", "X", "Z"])
                     
     def pad_zeros(self,shape):
         result = np.zeros(shape,'int')
@@ -140,7 +154,18 @@ class SonicActions(Sequence):
             while r % by != 0:
                 r = r+1
             data = self.pad_zeros((r,c))
-        return data.reshape(int(r/by),by,c)  
+        return data.reshape(int(r/by),by,c)
+
+    def map(self, indexer):
+        arr = []
+        for i in self.data:
+            val = indexer[tuple(i)]
+            if isinstance(val, (Sequence, np.ndarray)):
+                val = list(val)
+            else:
+                val = [val]
+            arr.append(val)
+        return SonicActions(arr)
         
     def __len__(self):
         return len(self.data)
