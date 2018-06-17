@@ -66,15 +66,11 @@ class PlayBack(object):
                 if done:
                     break
 
-    def actions(self, indexer=None):
+    def actions(self):
         with open(os.path.join(self.path,'{}-{}.json'.format(self.game,self.state))) as f:
             data = json.load(f)
         for ep in data:
-            if indexer is None:
-                data[ep] = SonicActions.from_sonic_config(data[ep])
-            else:
-                s = SonicActions.from_sonic_config(data[ep])
-                data[ep] = s.map(indexer)
+            data[ep] = SonicActions.from_sonic_config(data[ep])
 
         return data
 

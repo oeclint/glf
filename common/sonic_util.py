@@ -66,11 +66,6 @@ class SonicActDiscretizer(gym.ActionWrapper):
         else:
             self._actions = actions
 
-        self._action_indexer = {}
-
-        for i, a in enumerate(self._actions):
-            self._action_indexer[tuple(a)] = i
-
         self.action_space = gym.spaces.Discrete(len(self._actions))
 
     @classmethod
@@ -194,6 +189,14 @@ class SonicActionsVec(object):
 
         return np.stack([a.group_by(by) for a in arr],axis=2)
 
+    def discretize(self, env):
+
+        action_indexer = {}
+
+        for i, a in enumerate(env._actions):
+            action_indexer[tuple(a)] = i
+
+        return SonicActionsVec([action.map(action_indexer) for action in self.actions])
 
 class AllowBacktracking(gym.Wrapper):
     """
