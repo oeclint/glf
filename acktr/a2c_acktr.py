@@ -72,7 +72,7 @@ class A2C_ACKTR(object):
              dist_entropy * self.entropy_coef).backward()
         else:
             (value_loss * self.value_loss_coef + action_loss -
-             dist_entropy * self.entropy_coef + supervised_loss.mean()).backward()            
+             dist_entropy * self.entropy_coef + supervised_loss).backward()            
 
         if self.acktr == False:
             nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
