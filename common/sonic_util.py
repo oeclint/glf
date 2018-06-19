@@ -161,6 +161,17 @@ class SonicActions(Sequence):
                 val = [val]
             arr.append(val)
         return SonicActions(arr)
+
+    def tile(self, shape):
+        tile_len = len(self.data)
+        arr = self.pad_zeros(shape)
+        r,c = shape
+        for i in range(0, r, tile_len):
+            if i != 0:
+                slc = arr[i:i+tile_len]
+                arr[i:i+len(slc)] = arr[0:len(slc)]
+
+        return arr
         
     def __len__(self):
         return len(self.data)
@@ -184,7 +195,7 @@ class SonicActionsVec(object):
         arr = []
         for action in self.actions:
             if action.data.shape[0] < self.row:
-                action = SonicActions(action.pad_zeros((self.row, self.col)))
+                action = SonicActions(action.tile((self.row, self.col)))
             arr.append(action)
 
         return np.stack([a.group_by(by) for a in arr],axis=2)
