@@ -148,7 +148,7 @@ class SonicActions(Sequence):
         if r % by != 0:
             while r % by != 0:
                 r = r+1
-            data = self.pad_zeros((r,c))
+            data = self.tile((r,c))
         return data.reshape(int(r/by),by,c)
 
     def map(self, indexer):
@@ -192,10 +192,16 @@ class SonicActionsVec(object):
 
     def stack_by(self,by):
 
+        max_row = self.row
+
+        if max_row % by != 0:
+            while max_row % by != 0:
+                max_row = max_row+1
+
         arr = []
         for action in self.actions:
-            if action.data.shape[0] < self.row:
-                action = SonicActions(action.tile((self.row, self.col)))
+            if action.data.shape[0] < max_row:
+                action = SonicActions(action.tile((max_row, self.col)))
             arr.append(action)
 
         return np.stack([a.group_by(by) for a in arr],axis=2)
