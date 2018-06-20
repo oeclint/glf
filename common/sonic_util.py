@@ -52,19 +52,45 @@ class SonicActDiscretizer(gym.ActionWrapper):
     def __init__(self, env, actions = None):
         super(SonicActDiscretizer, self).__init__(env)
 
+        buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
+
         if actions is None:
 
-            buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
-            actions = [['LEFT'], ['RIGHT'], ['LEFT', 'DOWN'], ['RIGHT', 'DOWN'], ['DOWN'],
+            sonic_actions = [['LEFT'], ['RIGHT'], ['LEFT', 'DOWN'], ['RIGHT', 'DOWN'], ['DOWN'],
                        ['DOWN', 'B'], ['B']]
-            self._actions = []
-            for action in actions:
-                arr = np.array([False] * 12)
+            actions = []
+            for action in sonic_actions:
+                arr = np.array([0] * 12)
                 for button in action:
-                    arr[buttons.index(button)] = True
-                self._actions.append(arr)
-        else:
-            self._actions = actions
+                    arr[buttons.index(button)] = 1
+                actions.append(arr)
+
+        left = [0] * 12
+        left[buttons.index("LEFT")] = 1
+        left = tuple(left)
+        right = [0] * 12
+        right[buttons.index("RIGHT")] = 1
+        right = tuple(right)
+        jump = [0] * 12
+        jump[buttons.index("B")] = 1
+        jump = tuple(jump)
+
+        core_actions = tuple([left, right, jump])
+        actions_tup = tuple(map(tuple, actions))
+
+        for core_action in core_actions:
+            if core_action not in actions_tup:
+                raise ValueError("core actions missing in action set")
+
+        sort_index = []
+
+        for act in actions_tup:
+            if act in core_actions:
+                sort_index.append(core_actions.index(act))
+            else:
+                sort_index.append(len(sort_index)+len(core_actions))
+
+        self._actions = [np.array(a,'int') for _,a in sorted(zip(sort_index,actions_tup))]
 
         self.action_space = gym.spaces.Discrete(len(self._actions))
 
