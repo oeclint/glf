@@ -71,7 +71,7 @@ class PlayBack(object):
                 if done:
                     break
 
-    def filter_json(self):
+    def filter_json(self, min_rew=None):
 
         for fi in glob.glob(os.path.join(self.path,'{}-{}.json'.format(self.game,self.state))):
 
@@ -87,15 +87,23 @@ class PlayBack(object):
                 data = json.load(f)
 
             env = self.make(game=game, state=state, scenario=self.scenario)
+
             for ep in data:
                 filtered_actions = []
                 obs = env.reset()
+                reward = 0
                 for action in data[ep]:
                     filtered_actions.append(action)
                     obs, rew, done, info = env.step(action)
+                    reward += rew
                     if done:
-                        l = len(filtered_data)
-                        filtered_data[l] = filtered_actions
+                        if min_rew is not None:
+                            if reward>min_rew:
+                                l = len(filtered_data)
+                                filtered_data[l] = filtered_actions                     
+                        else:
+                            l = len(filtered_data)
+                            filtered_data[l] = filtered_actions
                         break
 
             with open(fi,'w') as outfile:
@@ -123,5 +131,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     p = PlayBack(game=args.game,state=args.state,scenario=args.scenario)
   #  p.play_bk2()
-  #  p.play_json()
-    p.filter_json()
+    p.play_json()
+#    p.filter_json(min_rew=9000)
