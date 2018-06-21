@@ -3,6 +3,7 @@ import os
 import json
 from retro_contest.local import make as contest_make
 from retro import make
+import retro
 import argparse
 from glf.common.sonic_util import SonicActions
 from glf.common.parse import to_json
@@ -23,7 +24,7 @@ class PlayBack(object):
 
         keysdict = {}
 
-        for f in glob.glob(os.path.join(self.path,'{}-{}*.bk2'.format(game,state))):
+        for f in glob.glob(os.path.join(self.path,'{}-{}*.bk2'.format(self.game,self.state))):
 
             movie = retro.Movie(f)
             movie.step()
@@ -53,7 +54,7 @@ class PlayBack(object):
             keysdict[ep] = keysarr
             
         if write:
-            with open('{}-{}.json'.format(self.game,self.state), 'w') as outfile:
+            with open(os.path.join(self.path,'{}-{}.json'.format(self.game,self.state)), 'w') as outfile:
                  outfile.write(to_json(keysdict))
 
     def play_json(self, render=True):
@@ -98,7 +99,7 @@ class PlayBack(object):
                     reward += rew
                     if done:
                         if min_rew is not None:
-                            if reward>min_rew:
+                            if reward>=min_rew:
                                 l = len(filtered_data)
                                 filtered_data[l] = filtered_actions                     
                         else:
@@ -113,13 +114,13 @@ class PlayBack(object):
 
 
 
-    def actions(self):
-        with open(os.path.join(self.path,'{}-{}.json'.format(self.game,self.state))) as f:
-            data = json.load(f)
-        for ep in data:
-            data[ep] = SonicActions.from_sonic_config(data[ep])
+    # def actions(self):
+    #     with open(os.path.join(self.path,'{}-{}.json'.format(self.game,self.state))) as f:
+    #         data = json.load(f)
+    #     for ep in data:
+    #         data[ep] = SonicActions.from_sonic_config(data[ep])
 
-        return data
+    #     return data
 
         
 
@@ -130,6 +131,6 @@ if __name__ == '__main__':
     parser.add_argument('--scenario', help='scenario to use', default='contest')
     args = parser.parse_args()
     p = PlayBack(game=args.game,state=args.state,scenario=args.scenario)
-  #  p.play_bk2()
+#    p.play_bk2(render=True)
     p.play_json()
 #    p.filter_json(min_rew=9000)

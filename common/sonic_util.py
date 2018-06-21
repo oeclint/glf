@@ -10,6 +10,14 @@ import json
 from glob import glob
 from collections.abc import Sequence
 
+from retro_contest.local import make as contest_make
+from retro import make
+from baselines import bench
+from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
+from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
+
+import torch
+
 class SonicObsWrapper(gym.ObservationWrapper):
     """
     Each timestep advances the game by 4 frames, and each observation 
@@ -44,26 +52,31 @@ class SonicObsWrapper(gym.ObservationWrapper):
         # move last axis to first
         return np.moveaxis(observation,-1,0)
 
-class SonicActDiscretizer(gym.ActionWrapper):
-    """
-    Wrap a gym-retro environment and make it use discrete
-    actions for the Sonic game.
-    """
-    def __init__(self, env, actions = None):
-        super(SonicActDiscretizer, self).__init__(env)
+def actions_from_human_data(game_state, scenario='scenario', play_path='../play/human', order=True):
 
-        buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
+    all_actions = []
+    buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
+    actions = {}
 
-        if actions is None:
+    for game, state in set(game_state):
 
-            sonic_actions = [['LEFT'], ['RIGHT'], ['LEFT', 'DOWN'], ['RIGHT', 'DOWN'], ['DOWN'],
-                       ['DOWN', 'B'], ['B']]
-            actions = []
-            for action in sonic_actions:
-                arr = np.array([0] * 12)
-                for button in action:
-                    arr[buttons.index(button)] = 1
-                actions.append(arr)
+        path = os.path.join(play_path,game,scenario)
+
+        fi = os.path.join(path,'{}-{}.json'.format(game,state))
+
+        with open(fi) as f:
+            actions[(game,state)] = json.load(f)
+
+        for ep in actions[(game,state)]:
+
+            arr = SonicActions.from_sonic_config(actions[(game,state)][ep])
+            actions[(game,state)][ep] = arr
+
+            all_actions+=arr.data.tolist()
+
+    unique_actions = [np.array(a, 'int') for a in list(set(map(tuple, all_actions)))]
+
+    if order:
 
         left = [0] * 12
         left[buttons.index("LEFT")] = 1
@@ -76,7 +89,7 @@ class SonicActDiscretizer(gym.ActionWrapper):
         jump = tuple(jump)
 
         core_actions = tuple([left, right, jump])
-        actions_tup = tuple(map(tuple, actions))
+        actions_tup = tuple(map(tuple, unique_actions))
 
         for core_action in core_actions:
             if core_action not in actions_tup:
@@ -90,30 +103,34 @@ class SonicActDiscretizer(gym.ActionWrapper):
             else:
                 sort_index.append(len(sort_index)+len(core_actions))
 
-        self._actions = [np.array(a,'int') for _,a in sorted(zip(sort_index,actions_tup))]
+        unique_actions = [np.array(a) for _,a in sorted(zip(sort_index,actions_tup))]
+
+    return unique_actions, actions
+
+class SonicActDiscretizer(gym.ActionWrapper):
+    """
+    Wrap a gym-retro environment and make it use discrete
+    actions for the Sonic game.
+    """
+    def __init__(self, env, actions = None):
+        super(SonicActDiscretizer, self).__init__(env)
+
+        if actions is None:
+
+            buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
+
+            sonic_actions = [['LEFT'], ['RIGHT'], ['B'], ['LEFT', 'DOWN'], ['RIGHT', 'DOWN'], ['DOWN'],
+                       ['DOWN', 'B']]
+            actions = []
+            for action in sonic_actions:
+                arr = np.array([0] * 12)
+                for button in action:
+                    arr[buttons.index(button)] = 1
+                actions.append(arr)
+
+        self._actions = actions
 
         self.action_space = gym.spaces.Discrete(len(self._actions))
-
-    @classmethod
-    def from_human_data(cls, env, game, state, scenario, root='../play/human'):
-
-        path = os.path.join(root,game,scenario)
-
-        all_actions = []
-
-        for fi in glob(os.path.join(path,'{}-{}.json'.format(game,state))):
-
-            with open(fi) as f:
-                data = json.load(f)
-
-            for ep in data:
-
-                arr = SonicActions.from_sonic_config(data[ep])
-                data[ep] = arr
-
-                all_actions+=arr.data.tolist()
-
-        return cls(env, np.array(list(set(map(tuple, all_actions)))))
 
     def action(self, a):
         return self._actions[a].copy()
@@ -232,11 +249,11 @@ class SonicActionsVec(object):
 
         return np.stack([a.group_by(by) for a in arr],axis=2)
 
-    def discretize(self, env):
+    def discretize(self, actions):
 
         action_indexer = {}
 
-        for i, a in enumerate(env._actions):
+        for i, a in enumerate(actions):
             action_indexer[tuple(a)] = i
 
         return SonicActionsVec([action.map(action_indexer) for action in self.actions])
@@ -264,3 +281,53 @@ class AllowBacktracking(gym.Wrapper):
         rew = max(0, self._cur_x - self._max_x)
         self._max_x = max(self._max_x, self._cur_x)
         return obs, rew, done, info
+
+def make_env(game, state, seed, rank, log_dir=None, scenario=None, actions=None):
+
+    def _thunk():
+
+        if scenario is None:
+            env = contest_make(game,state)
+        else:
+            env = make(game, state, scenario=scenario)
+
+        env.seed(seed + rank)
+
+        if log_dir is not None:
+            log_path = os.path.join(log_dir, state)
+            if not os.path.exists(log_path):
+                os.makedirs(log_path)
+            env = bench.Monitor(env, os.path.join(log_path, str(rank)), allow_early_resets=True)
+
+        env = SonicObsWrapper(env)
+        env = AllowBacktracking(env)
+        env = SonicActDiscretizer(env, actions)
+
+        return env
+
+    return _thunk
+
+def make_envs(game_state, seed = 1, log_dir=None, scenario = None, actions=None):
+
+    num_processes = len(game_state)
+
+    envs = [make_env(game_state[i][0], game_state[i][1], seed, i, log_dir, scenario, actions)
+            for i in range(num_processes)]
+
+    if num_processes > 1:
+        envs = SubprocVecEnv(envs)
+    else:
+        envs = DummyVecEnv(envs)
+
+    if len(envs.observation_space.shape) == 1:
+        envs = VecNormalize(envs)
+
+    return envs
+
+def update_current_obs(current_obs,obs,envs,num_stack):
+    
+    shape_dim0 = envs.observation_space.shape[0]
+    obs = torch.from_numpy(obs).float()
+    if num_stack > 1:
+        current_obs[:, :-shape_dim0] = current_obs[:, shape_dim0:]
+    current_obs[:, -shape_dim0:] = obs
