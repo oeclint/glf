@@ -208,7 +208,6 @@ class Trainer(object):
             start = time.time()
 
             for action_group in sonic_actions.stack_by(self.num_steps):
-                masks_arr = []
                 for step, actions in enumerate(action_group):
 
                     with torch.no_grad():
@@ -238,9 +237,7 @@ class Trainer(object):
                     episode_rewards += reward
 
                     # If done then clean the history of observations.
-                    masks = [[0.0] if done_ else [1.0] for done_ in done]
-                    masks_arr.append(masks)
-                    masks = torch.FloatTensor(masks)
+                    masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in done])
                     final_rewards *= masks
                     final_rewards += (1 - masks) * episode_rewards
                     episode_rewards *= masks
