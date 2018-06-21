@@ -157,7 +157,7 @@ class Trainer(object):
 
             rollouts.after_update()
 
-    def train_from_human(self,game_state,num_repeat=30,log_dir='log_human',play_path='../human',scenario='contest'):
+    def train_from_human(self,game_state,num_repeat=30,log_dir='log_human',play_path='human',scenario='contest'):
 
         unique_actions, game_state_actions = actions_from_human_data(game_state, scenario, play_path)
         self.actions = unique_actions
