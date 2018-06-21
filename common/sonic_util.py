@@ -295,8 +295,7 @@ def make_env(game, state, seed, rank, log_dir=None, scenario=None, actions=None)
 
         if log_dir is not None:
             log_path = os.path.join(log_dir, state)
-            if not os.path.exists(log_path):
-                os.makedirs(log_path)
+            os.makedirs(log_path, exist_ok=True)
             env = bench.Monitor(env, os.path.join(log_path, str(rank)), allow_early_resets=True)
 
         env = SonicObsWrapper(env)
