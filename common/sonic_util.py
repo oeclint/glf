@@ -74,7 +74,7 @@ def actions_from_human_data(game_state, scenario='scenario', play_path='../play/
 
             all_actions+=arr.data.tolist()
 
-    unique_actions = [np.array(a, 'int') for a in list(set(map(tuple, all_actions)))]
+    unique_actions = [np.array(a, 'int') for a in set(map(tuple, all_actions))]
 
     if order:
 
