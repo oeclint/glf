@@ -3,13 +3,14 @@ import torch
 import numpy as np
 
 from glf.common.sonic_util import make_envs, SonicActionsVec, update_current_obs, actions_from_human_data
+from glf.common.containers import OrderedMapping
 from glf.acktr.a2c_acktr import A2C_ACKTR
 from glf.acktr.model import Policy
 from glf.acktr.storage import RolloutStorage
 
 import time
 from baselines.logger import CSVOutputFormat
-from collections import OrderedDict
+
 
 class Trainer(object):
     def __init__(self, num_stack = 4,
@@ -166,13 +167,13 @@ class Trainer(object):
                 end = time.time()
                 total_num_steps = (j + 1) * num_processes * self.num_steps
 
-                kv = OrderedDict([("updates", j),
+                kv = OrderedMapping([("updates", j),
                                   ("num timesteps", total_num_steps),
                                   ("FPS", int(total_num_steps / (end - start))),
-                                  ("mean reward", final_rewards.mean()),
-                                  ("median reward", final_rewards.median()),
-                                  ("min reward", final_rewards.min()),
-                                  ("max reward", final_rewards.max()),
+                                  ("mean reward", final_rewards.mean().tolist()),
+                                  ("median reward", final_rewards.median().tolist()),
+                                  ("min reward", final_rewards.min().tolist()),
+                                  ("max reward", final_rewards.max().tolist()),
                                   ("entropy", dist_entropy),
                                   ("value_loss", value_loss),
                                   ("action_loss", action_loss)])
