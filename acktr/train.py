@@ -136,7 +136,7 @@ class Trainer(object):
                 episode_rewards *= masks
 
                 if self.cuda:
-                    masks = masks.self.cuda()
+                    masks = masks.cuda()
 
                 if current_obs.dim() == 4:
                     current_obs *= masks.unsqueeze(2).unsqueeze(2)
