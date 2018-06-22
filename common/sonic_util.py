@@ -298,9 +298,9 @@ def make_env(game, state, seed, rank, log_dir=None, scenario=None, actions=None)
             os.makedirs(log_path, exist_ok=True)
             env = bench.Monitor(env, os.path.join(log_path, str(rank)), allow_early_resets=True)
 
+        env = SonicActDiscretizer(env, actions)
         env = SonicObsWrapper(env)
         env = AllowBacktracking(env)
-        env = SonicActDiscretizer(env, actions)
 
         return env
 
