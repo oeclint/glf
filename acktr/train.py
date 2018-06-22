@@ -8,6 +8,8 @@ from glf.acktr.model import Policy
 from glf.acktr.storage import RolloutStorage
 
 import time
+from baselines.logger import CSVOutputFormat
+from collections import OrderedDict
 
 class Trainer(object):
     def __init__(self, num_stack = 4,
@@ -55,6 +57,7 @@ class Trainer(object):
         self.use_gae = use_gae
         self.gamma = gamma
         self.tau = tau
+        self.log_interval = log_interval
         
         if self.cuda:
             torch.cuda.manual_seed(seed)
@@ -113,6 +116,8 @@ class Trainer(object):
 
         num_updates = int(num_frames) // self.num_steps // num_processes
 
+        csvwriter = CSVOutputFormat('rewards.csv')
+
         start = time.time()
         for j in range(num_updates):
             for step in range(self.num_steps):
@@ -156,6 +161,23 @@ class Trainer(object):
             value_loss, action_loss, dist_entropy = self.agent.update(rollouts)
 
             rollouts.after_update()
+
+            if j % self.log_interval == 0:
+                end = time.time()
+                total_num_steps = (j + 1) * num_processes * self.num_steps
+
+                kv = OrderedDict([("updates", j),
+                                  ("num timesteps", total_num_steps),
+                                  ("FPS", int(total_num_steps / (end - start))),
+                                  ("mean reward", final_rewards.mean()),
+                                  ("median reward", final_rewards.median()),
+                                  ("min reward", final_rewards.min()),
+                                  ("max reward", final_rewards.max()),
+                                  ("entropy", dist_entropy),
+                                  ("value_loss", value_loss),
+                                  ("action_loss", action_loss)])
+
+                csvwriter.writekvs(kv)
 
     def train_from_human(self,game_state,num_repeat=30,log_dir='log_human',play_path='human',scenario='contest'):
 
