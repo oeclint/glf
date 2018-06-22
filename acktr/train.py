@@ -84,7 +84,7 @@ class Trainer(object):
             eps = self.eps,
             max_grad_norm = self.max_grad_norm)
    
-    def train(self,game,state,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10,record_interval=10000,record_path='bk2s'):
+    def train(self,game,state,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10,record_interval=10000,record_path=None):
 
         processes = [(game,state)]*num_processes
 
@@ -161,8 +161,10 @@ class Trainer(object):
 
             rollouts.after_update()
 
-            if j % record_interval == 0:
-                envs.record_movie(record_path)
+            if record_path is not None:
+
+                if j % record_interval == 0:
+                    envs.record_movie(record_path)
 
             if j % log_interval == 0:
                 end = time.time()
