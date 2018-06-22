@@ -314,7 +314,7 @@ def make_envs(game_state, seed = 1, log_dir=None, scenario = None, actions=None)
             for i in range(num_processes)]
 
     if num_processes > 1:
-        envs = SubprocVecEnv(envs)
+        envs = SubprocVecEnvRecord(envs)
     else:
         envs = DummyVecEnv(envs)
 
@@ -330,3 +330,12 @@ def update_current_obs(current_obs,obs,envs,num_stack):
     if num_stack > 1:
         current_obs[:, :-shape_dim0] = current_obs[:, shape_dim0:]
     current_obs[:, -shape_dim0:] = obs
+
+class SubprocVecEnvRecord(SubprocVecEnv):
+    def __init__(self, env_fns, spaces=None):
+        super(SubprocVecEnvRecord, self).__init__(env_fns, spaces=None)
+        self._env_fns = env_fns
+
+    def record_movie(self, path):
+        for env_fn in self._env_fns:
+            env_fn().record_movie(path)
