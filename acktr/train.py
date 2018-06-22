@@ -32,7 +32,6 @@ class Trainer(object):
         gamma = 0.99,
         tau = 0.95,
         vis_interval = 100,
-        log_interval = 10,
         save_interval = 100,
         save_dir = 'trained_models',
         algo = 'acktr',
@@ -58,7 +57,6 @@ class Trainer(object):
         self.use_gae = use_gae
         self.gamma = gamma
         self.tau = tau
-        self.log_interval = log_interval
         
         if self.cuda:
             torch.cuda.manual_seed(seed)
@@ -86,7 +84,7 @@ class Trainer(object):
             eps = self.eps,
             max_grad_norm = self.max_grad_norm)
    
-    def train(self,game,state,num_frames=10e6,num_processes=16,log_dir='log'):
+    def train(self,game,state,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10,record_interval=10000,record_path='bk2s'):
 
         processes = [(game,state)]*num_processes
 
@@ -163,7 +161,10 @@ class Trainer(object):
 
             rollouts.after_update()
 
-            if j % self.log_interval == 0:
+            if j % record_interval == 0:
+                envs.record_movie(record_path)
+
+            if j % log_interval == 0:
                 end = time.time()
                 total_num_steps = (j + 1) * num_processes * self.num_steps
 
