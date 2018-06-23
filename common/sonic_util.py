@@ -304,7 +304,7 @@ def make_env(game, state, seed, rank, log_dir=None, scenario=None, actions=None)
 
         else:
 
-            env = bench.Monitor(env, log_dir), allow_early_resets=True)
+            env = bench.Monitor(env, log_dir, allow_early_resets=True)
 
 
         return env
@@ -351,8 +351,8 @@ class SubprocVecEnvRecord(SubprocVecEnv):
                 if record:
                     self.record[i] = False
                     env = env_fn().env.unwrapped
-                    rel_statename = os.path.splitext(os.path.basename(env_fn().statename))[0]
-                    env.record_movie(os.path.join(path, '%s-%s-%04d-%04d.bk2' % (env_fn().gamename, rel_statename, i, len(env_fn().episode_rewards))))
+                    rel_statename = os.path.splitext(os.path.basename(env.statename))[0]
+                    env.record_movie(os.path.join(path, '%s-%s-%04d-%04d.bk2' % (env.gamename, rel_statename, i, len(env_fn().episode_rewards))))
                     #self.record_count[i] = self.record_count[i] + 1
 
     def set_record(self):
