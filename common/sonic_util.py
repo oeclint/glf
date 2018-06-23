@@ -293,14 +293,19 @@ def make_env(game, state, seed, rank, log_dir=None, scenario=None, actions=None)
 
         env.seed(seed + rank)
 
+        env = SonicObsWrapper(env)
+        env = AllowBacktracking(env)
+        env = SonicActDiscretizer(env, actions)
+
         if log_dir is not None:
             log_path = os.path.join(log_dir, state)
             os.makedirs(log_path, exist_ok=True)
             env = bench.Monitor(env, os.path.join(log_path, str(rank)), allow_early_resets=True)
 
-        env = SonicObsWrapper(env)
-        env = AllowBacktracking(env)
-        env = SonicActDiscretizer(env, actions)
+        else:
+
+            env = bench.Monitor(env, log_dir), allow_early_resets=True)
+
 
         return env
 
@@ -332,10 +337,24 @@ def update_current_obs(current_obs,obs,envs,num_stack):
     current_obs[:, -shape_dim0:] = obs
 
 class SubprocVecEnvRecord(SubprocVecEnv):
+
     def __init__(self, env_fns, spaces=None):
         super(SubprocVecEnvRecord, self).__init__(env_fns, spaces=None)
         self._env_fns = env_fns
+        self.record = [False]*len(self._env_fns)
+        #self.record_count = [0]*len(self._env_fns)
 
     def record_movie(self, path):
-        for env_fn in self._env_fns:
-            env_fn().env.record_movie(path)
+        for i, env_fn in enumerate(self._env_fns):
+            if self.record[i]:
+                record = env_fn().needs_reset
+                if record:
+                    self.record[i] = False
+                    env = env_fn().env.unwrapped
+                    rel_statename = os.path.splitext(os.path.basename(env_fn().statename))[0]
+                    env.record_movie(os.path.join(path, '%s-%s-%04d-%04d.bk2' % (env_fn().gamename, rel_statename, i, len(env_fn().episode_rewards))))
+                    #self.record_count[i] = self.record_count[i] + 1
+
+    def set_record(self):
+        self.record = [True]*len(self._env_fns)
+

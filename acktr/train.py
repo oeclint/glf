@@ -150,6 +150,13 @@ class Trainer(object):
                 update_current_obs(current_obs, obs, envs, self.num_stack)
                 rollouts.insert(current_obs, states, action, action_log_prob, value, reward, masks)
 
+                if record_path is not None:
+
+                    if j % record_interval == 0:
+                        envs.set_record()
+                    
+                    envs.record_movie(record_path)
+
             with torch.no_grad():
                 next_value = actor_critic.get_value(rollouts.observations[-1],
                                                     rollouts.states[-1],
@@ -161,10 +168,6 @@ class Trainer(object):
 
             rollouts.after_update()
 
-            if record_path is not None:
-
-                if j % record_interval == 0:
-                    envs.record_movie(record_path)
 
             if j % log_interval == 0:
                 end = time.time()
