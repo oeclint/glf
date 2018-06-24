@@ -295,16 +295,16 @@ class EnvRecorder(gym.Wrapper):
     def reset(self, **kwargs): # pylint: disable=E0202
         obs = self.env.reset(**kwargs)
         self.env.unwrapped.stop_record()
-        if self.record:
+        if self._record:
             self.env.unwrapped.auto_record()
-            self.record = False
+            self._record = False
         return obs
 
     def step(self, action): # pylint: disable=E0202
         self.step+=1
         obs, rew, done, info = self.env.step(action)
         if self.step % self.interval == 0:
-            self.record = True
+            self._record = True
         return obs, rew, done, info
 
 def make_env(game, state, seed, rank, log_dir=None, scenario=None, actions=None, record_dir=None, record_interval=10000):
