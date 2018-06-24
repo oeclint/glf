@@ -286,17 +286,25 @@ class EnvRecorder(gym.Wrapper):
     """
     Record gym environment every n time steps
     """
-    def __init__(self, env, interval):
+    def __init__(self, env, rank, record_dir, interval):
         super(EnvRecorder, self).__init__(env)
         self._record = False
+        self.rank = rank
+        self.record_dir = record_dir
         self.interval = interval
         self.step_count = 0
+        self.record_id
 
     def reset(self, **kwargs): # pylint: disable=E0202
         obs = self.env.reset(**kwargs)
-        self.env.unwrapped.stop_record()
+        unwrapped_env = self.env.unwrapped
+#        self.env.unwrapped.stop_record()
         if self._record:
-            self.env.unwrapped.auto_record()
+            rel_statename = os.path.splitext(os.path.basename(unwrapped_env.statename))[0]
+            unwrapped_env.record_movie(os.path.join(self.record_dir, 
+                '%s-%s-%04d-%04d.bk2' % (unwrapped_env.gamename, rel_statename, self.rank, self.record_id)))
+#            self.env.unwrapped.auto_record(self.record_dir)
+            self.record_id += 1
             self._record = False
         return obs
 
@@ -319,7 +327,7 @@ def make_env(game, state, seed, rank, log_dir=None, scenario=None, actions=None,
         env.seed(seed + rank)
 
         if record_dir is not None:
-            env = EnvRecorder(env, record_interval)
+            env = EnvRecorder(env, rank, record_dir, record_interval)
 
         if log_dir is not None:
             log_path = os.path.join(log_dir, state)
