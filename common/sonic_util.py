@@ -293,7 +293,7 @@ class EnvRecorder(gym.Wrapper):
         self.record_dir = record_dir
         self.interval = interval
         self.step_count = 0
-        self.record_id
+        self.record_id = 0
 
     def reset(self, **kwargs): # pylint: disable=E0202
         obs = self.env.reset(**kwargs)
