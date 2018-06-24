@@ -290,7 +290,7 @@ class EnvRecorder(gym.Wrapper):
         super(EnvRecorder, self).__init__(env)
         self._record = False
         self.interval = interval
-        self.step = 0
+        self.step_count = 0
 
     def reset(self, **kwargs): # pylint: disable=E0202
         obs = self.env.reset(**kwargs)
@@ -301,9 +301,9 @@ class EnvRecorder(gym.Wrapper):
         return obs
 
     def step(self, action): # pylint: disable=E0202
-        self.step+=1
+        self.step_count+=1
         obs, rew, done, info = self.env.step(action)
-        if self.step % self.interval == 0:
+        if self.step_count % self.interval == 0:
             self._record = True
         return obs, rew, done, info
 
