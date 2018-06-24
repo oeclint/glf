@@ -84,7 +84,7 @@ class Trainer(object):
             eps = self.eps,
             max_grad_norm = self.max_grad_norm)
    
-    def train(self,game,state,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10,record_dir='bk2s',record_interval=10000):
+    def train(self,game,state,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10,record_dir='bk2s',record_interval=100):
 
         processes = [(game,state)]*num_processes
 

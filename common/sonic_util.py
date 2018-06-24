@@ -284,35 +284,28 @@ class AllowBacktracking(gym.Wrapper):
 
 class EnvRecorder(gym.Wrapper):
     """
-    Record gym environment every n time steps
+    Record gym environment every n episodes
     """
-    def __init__(self, env, rank, record_dir, interval):
+    def __init__(self, env, record_dir, interval):
         super(EnvRecorder, self).__init__(env)
-        self._record = False
-        self.rank = rank
         self.record_dir = record_dir
         self.interval = interval
-        self.step_count = 0
-        self.record_id = 0
+        self.ep_count = 0
 
     def reset(self, **kwargs): # pylint: disable=E0202
+        if self.ep_count % self.interval == 0:
+            self.env.unwrapped.movie_id = self.ep_count
+            self.env.unwrapped.auto_record(self.record_dir)
+        else:
+            self.env.unwrapped.stop_record()
+        
         obs = self.env.reset(**kwargs)
-        unwrapped_env = self.env.unwrapped
-#        self.env.unwrapped.stop_record()
-        if self._record:
-            rel_statename = os.path.splitext(os.path.basename(unwrapped_env.statename))[0]
-            unwrapped_env.record_movie(os.path.join(self.record_dir, 
-                '%s-%s-%04d-%04d.bk2' % (unwrapped_env.gamename, rel_statename, self.rank, self.record_id)))
-#            self.env.unwrapped.auto_record(self.record_dir)
-            self.record_id += 1
-            self._record = False
+        self.ep_count += 1
+
         return obs
 
     def step(self, action): # pylint: disable=E0202
-        self.step_count+=1
         obs, rew, done, info = self.env.step(action)
-        if self.step_count % self.interval == 0:
-            self._record = True
         return obs, rew, done, info
 
 def make_env(game, state, seed, rank, log_dir=None, scenario=None, actions=None, record_dir=None, record_interval=10000):
@@ -327,7 +320,9 @@ def make_env(game, state, seed, rank, log_dir=None, scenario=None, actions=None,
         env.seed(seed + rank)
 
         if record_dir is not None:
-            env = EnvRecorder(env, rank, record_dir, record_interval)
+            record_path = os.path.join(record_dir,str(rank))
+            os.makedirs(record_path, exist_ok=True)
+            env = EnvRecorder(env, record_path, record_interval)
 
         if log_dir is not None:
             log_path = os.path.join(log_dir, state)
