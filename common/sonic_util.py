@@ -287,16 +287,16 @@ class EnvRecorder(gym.Wrapper):
     Record gym environment every n time steps
     """
     def __init__(self, env, interval):
-        super(EnvRecorder, self).__init__(env.unwrapped)
+        super(EnvRecorder, self).__init__(env)
         self._record = False
         self.interval = interval
         self.step = 0
 
     def reset(self, **kwargs): # pylint: disable=E0202
         obs = self.env.reset(**kwargs)
-        self.env.stop_record()
+        self.env.unwrapped.stop_record()
         if self.record:
-            self.env.auto_record()
+            self.env.unwrapped.auto_record()
             self.record = False
         return obs
 
