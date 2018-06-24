@@ -282,7 +282,32 @@ class AllowBacktracking(gym.Wrapper):
         self._max_x = max(self._max_x, self._cur_x)
         return obs, rew, done, info
 
-def make_env(game, state, seed, rank, log_dir=None, scenario=None, actions=None):
+class EnvRecorder(gym.Wrapper):
+    """
+    Record gym environment every n time steps
+    """
+    def __init__(self, env, interval):
+        super(EnvRecorder, self).__init__(env)
+        self._record = False
+        self.interval = interval
+        self.step = 0
+
+    def reset(self, **kwargs): # pylint: disable=E0202
+        obs = self.env.reset(**kwargs)
+        self.env.stop_record()
+        if self.record:
+            self.env.auto_record()
+            self.record = False
+        return obs
+
+    def step(self, action): # pylint: disable=E0202
+        self.step+=1
+        obs, rew, done, info = self.env.step(action)
+        if self.step % self.interval == 0:
+            self.record = True
+        return obs, rew, done, info
+
+def make_env(game, state, seed, rank, log_dir=None, scenario=None, actions=None, record_dir=None, record_interval=10000):
 
     def _thunk():
 
@@ -293,33 +318,31 @@ def make_env(game, state, seed, rank, log_dir=None, scenario=None, actions=None)
 
         env.seed(seed + rank)
 
-        env = SonicObsWrapper(env)
-        env = AllowBacktracking(env)
-        env = SonicActDiscretizer(env, actions)
+        if record_dir is not None:
+            env = EnvRecorder(env, record_interval)
 
         if log_dir is not None:
             log_path = os.path.join(log_dir, state)
             os.makedirs(log_path, exist_ok=True)
             env = bench.Monitor(env, os.path.join(log_path, str(rank)), allow_early_resets=True)
 
-        else:
-
-            env = bench.Monitor(env, log_dir, allow_early_resets=True)
-
+        env = SonicObsWrapper(env)
+        env = AllowBacktracking(env)
+        env = SonicActDiscretizer(env, actions)
 
         return env
 
     return _thunk
 
-def make_envs(game_state, seed = 1, log_dir=None, scenario = None, actions=None):
+def make_envs(game_state, seed = 1, log_dir=None, scenario = None, actions=None, record_dir=None, record_interval=10000):
 
     num_processes = len(game_state)
 
-    envs = [make_env(game_state[i][0], game_state[i][1], seed, i, log_dir, scenario, actions)
+    envs = [make_env(game_state[i][0], game_state[i][1], seed, i, log_dir, scenario, actions, record_dir, record_interval)
             for i in range(num_processes)]
 
     if num_processes > 1:
-        envs = SubprocVecEnvRecord(envs)
+        envs = SubprocVecEnv(envs)
     else:
         envs = DummyVecEnv(envs)
 
@@ -335,26 +358,3 @@ def update_current_obs(current_obs,obs,envs,num_stack):
     if num_stack > 1:
         current_obs[:, :-shape_dim0] = current_obs[:, shape_dim0:]
     current_obs[:, -shape_dim0:] = obs
-
-class SubprocVecEnvRecord(SubprocVecEnv):
-
-    def __init__(self, env_fns, spaces=None):
-        super(SubprocVecEnvRecord, self).__init__(env_fns, spaces=None)
-        self._env_fns = env_fns
-        self.record = [False]*len(self._env_fns)
-        #self.record_count = [0]*len(self._env_fns)
-
-    def record_movie(self, path):
-        for i, env_fn in enumerate(self._env_fns):
-            if self.record[i]:
-                record = env_fn().needs_reset
-                if record:
-                    self.record[i] = False
-                    env = env_fn().env.unwrapped
-                    rel_statename = os.path.splitext(os.path.basename(env.statename))[0]
-                    env.record_movie(os.path.join(path, '%s-%s-%04d-%04d.bk2' % (env.gamename, rel_statename, i, len(env_fn().episode_rewards))))
-                    #self.record_count[i] = self.record_count[i] + 1
-
-    def set_record(self):
-        self.record = [True]*len(self._env_fns)
-

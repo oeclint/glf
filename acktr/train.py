@@ -84,11 +84,11 @@ class Trainer(object):
             eps = self.eps,
             max_grad_norm = self.max_grad_norm)
    
-    def train(self,game,state,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10,record_interval=10000,record_path=None):
+    def train(self,game,state,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10,record_dir='bk2s',record_interval=10000):
 
         processes = [(game,state)]*num_processes
 
-        envs = make_envs(processes,log_dir=log_dir,actions=self.actions)
+        envs = make_envs(processes,log_dir=log_dir,actions=self.actions,record_dir=record_dir, record_interval=record_interval)
 
         obs_shape = envs.observation_space.shape
         obs_shape = (obs_shape[0] * self.num_stack, *obs_shape[1:])
@@ -150,12 +150,6 @@ class Trainer(object):
                 update_current_obs(current_obs, obs, envs, self.num_stack)
                 rollouts.insert(current_obs, states, action, action_log_prob, value, reward, masks)
 
-                if record_path is not None:
-
-                    if j % record_interval == 0:
-                        envs.set_record()
-                    
-                    envs.record_movie(record_path)
 
             with torch.no_grad():
                 next_value = actor_critic.get_value(rollouts.observations[-1],
