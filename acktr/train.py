@@ -18,7 +18,6 @@ class Trainer(object):
         vis = False,
         value_loss_coef = 0.5,
         entropy_coef = 0.01,
-        lr = 7e-6,
         alpha = 0.99,
         eps = 1e-5,
         max_grad_norm = 0.5,
@@ -47,7 +46,6 @@ class Trainer(object):
         self.recurrent_policy = recurrent_policy
         self.value_loss_coef = value_loss_coef
         self.entropy_coef = entropy_coef 
-        self.lr = lr
         self.alpha = alpha
         self.eps = eps
         self.max_grad_norm = max_grad_norm
@@ -71,7 +69,7 @@ class Trainer(object):
         self.agent = None
         self.actions = None
 
-    def make_agent(self, obs_shape, action_space):
+    def make_agent(self, lr, obs_shape, action_space):
 
         actor_critic = Policy(obs_shape, action_space, self.recurrent_policy, self.cuda)
 
@@ -79,12 +77,23 @@ class Trainer(object):
             actor_critic,
             self.value_loss_coef,
             self.entropy_coef,
-            lr = self.lr,
+            lr = lr,
             alpha = self.alpha,
             eps = self.eps,
             max_grad_norm = self.max_grad_norm)
+
+    def set_lr(self, lr)
+
+        if self.agent is not None:
+
+            for param_group in self.agent.optimizer.param_groups:
+                param_group['lr'] = lr
+
+        else:
+
+            raise RuntimeError('agent is not set')
    
-    def train(self,game,state,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10,record_dir='bk2s',record_interval=100):
+    def train(self,game,state,lr=7e-5,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10,record_dir='bk2s',record_interval=100):
 
         processes = [(game,state)]*num_processes
 
@@ -94,7 +103,9 @@ class Trainer(object):
         obs_shape = (obs_shape[0] * self.num_stack, *obs_shape[1:])
 
         if self.agent is None:
-            self.make_agent(obs_shape, envs.action_space)
+            self.make_agent(lr,obs_shape, envs.action_space)
+        else:
+            self.set_lr(lr)
 
         actor_critic = self.agent.actor_critic
 
@@ -180,7 +191,7 @@ class Trainer(object):
 
                 csvwriter.writekvs(kv)
 
-    def train_from_human(self,game_state,num_repeat=30,log_dir='log_human',play_path='human',scenario='contest'):
+    def train_from_human(self,game_state,lr=7e-6,num_repeat=30,log_dir='log_human',play_path='human',scenario='contest'):
 
         unique_actions, game_state_actions = actions_from_human_data(game_state, scenario, play_path)
         self.actions = unique_actions
@@ -200,7 +211,9 @@ class Trainer(object):
         obs_shape = (obs_shape[0] * self.num_stack, *obs_shape[1:])
 
         if self.agent is None:
-            self.make_agent(obs_shape, envs.action_space)
+            self.make_agent(lr,obs_shape, envs.action_space)
+        else:
+            self.set_lr(lr)
 
         actor_critic = self.agent.actor_critic
 
