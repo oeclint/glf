@@ -287,7 +287,7 @@ class EnvRecorder(gym.Wrapper):
     Record gym environment every n time steps
     """
     def __init__(self, env, interval):
-        super(EnvRecorder, self).__init__(env)
+        super(EnvRecorder, self).__init__(env.unwrapped)
         self._record = False
         self.interval = interval
         self.step = 0
