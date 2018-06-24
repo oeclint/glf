@@ -82,7 +82,7 @@ class Trainer(object):
             eps = self.eps,
             max_grad_norm = self.max_grad_norm)
 
-    def set_lr(self, lr)
+    def set_lr(self, lr):
 
         if self.agent is not None:
 
