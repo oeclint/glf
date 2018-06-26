@@ -39,6 +39,20 @@ class Policy(nn.Module):
     def forward(self, inputs, states, masks):
         raise NotImplementedError
 
+    def supervised_act(self, inputs, states, masks, action, deterministic=False):
+        value, actor_features, states = self.base(inputs, states, masks)
+        dist = self.dist(actor_features)
+
+        if deterministic:
+            critic_action = dist.mode()
+        else:
+            critic_action = dist.sample()
+
+        action_log_probs = dist.log_probs(action)
+        dist_entropy = dist.entropy().mean()
+
+        return value, critic_action, action_log_probs, states
+
     def act(self, inputs, states, masks, deterministic=False):
         value, actor_features, states = self.base(inputs, states, masks)
         dist = self.dist(actor_features)

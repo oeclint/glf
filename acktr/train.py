@@ -220,7 +220,7 @@ class Trainer(object):
         sonic_actions = SonicActionsVec(sonic_actions)
         sonic_actions = sonic_actions.discretize(self.actions)
 
-        #f = open('acc.txt', 'w')
+        f = open('acc.txt', 'w')
 
         for s in range(num_repeat):
 
@@ -246,16 +246,17 @@ class Trainer(object):
             for action_group in sonic_actions.stack_by(self.num_steps):
                 for step, actions in enumerate(action_group):
 
-                    with torch.no_grad():
-                        value, critic_actions , action_log_prob, states = actor_critic.act(
-                                rollouts.observations[step],
-                                rollouts.states[step],
-                                rollouts.masks[step])
-                   
                     actions = torch.tensor(actions)
                     if self.cuda:
-                        actions.cuda()
+                        actions = actions.cuda()
 
+                    with torch.no_grad():
+                        value, critic_actions , action_log_prob, states = actor_critic.supervised_act(
+                                rollouts.observations[step],
+                                rollouts.states[step],
+                                rollouts.masks[step],
+                                actions)
+                   
                     cpu_actions = actions.squeeze(1).cpu().numpy()
                     #weighted loss calculation
                     for i,(act, true_act) in enumerate(zip(critic_actions,cpu_actions)):
@@ -292,7 +293,7 @@ class Trainer(object):
                     critic_actions = critic_actions.squeeze(1).cpu().numpy()
                     expected_actions = cpu_actions
 
-                    #f.write('step ' + str(s) + '>>' + ','.join([str(a1) for a1 in critic_actions]) + '>>' + ','.join([str(a2) for a2 in expected_actions]) + '\n')
+                    f.write('step ' + str(s) + '>>>' + ','.join([str(a1) for a1 in critic_actions]) + '>>' + ','.join([str(a2) for a2 in expected_actions]) + '\n')
               
                 with torch.no_grad():
                     next_value = actor_critic.get_value(rollouts.observations[-1],
@@ -302,13 +303,13 @@ class Trainer(object):
                 rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
                 supervised_loss = supervised_losses.mean()
                 
-                #f.write('loss >>' + str(supervised_loss) + '\n')
+                f.write('loss >>' + str(supervised_loss) + '\n')
 
-                value_loss, action_loss, dist_entropy = self.agent.update(rollouts,supervised_loss)
+                value_loss, action_loss, dist_entropy = self.agent.update(rollouts)
 
                 rollouts.after_update()
 
-        #f.close()
+        f.close()
 
 if __name__ == '__main__':
     t = Trainer()
