@@ -132,5 +132,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     p = PlayBack(game=args.game,state=args.state,scenario=args.scenario)
 #    p.play_bk2(render=True)
-    p.play_json()
-#    p.filter_json(min_rew=9000)
+#    p.play_json()
+    p.filter_json(min_rew=9000)

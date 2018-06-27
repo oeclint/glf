@@ -308,7 +308,7 @@ class Trainer(object):
 
                 rollouts.after_update()
 
-                supervised_loss = supervised_losses.mean()
+                supervised_loss = supervised_losses.mean().tolist()
 
                 end = time.time()
                 

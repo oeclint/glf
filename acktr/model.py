@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from glf.acktr.distributions import Categorical, DiagGaussian
 from glf.acktr.utils import init, init_normc_
+from glf.acktr.gmodel import G
 
 
 class Flatten(nn.Module):
@@ -11,10 +12,14 @@ class Flatten(nn.Module):
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_shape, action_space, recurrent_policy, cuda=False, temp = 1):
+    def __init__(self, obs_shape, action_space, recurrent_policy, g=False, cuda=False, temp = 1):
         super(Policy, self).__init__()
         if len(obs_shape) == 3:
-            self.base = CNNBase(obs_shape[0], recurrent_policy)
+            cnnbase = CNNBase(obs_shape[0], recurrent_policy)
+            if not g:
+                self.base = cnnbase
+            else:
+                self.base = G(cnnbase)
         elif len(obs_shape) == 1:
             assert not recurrent_policy, \
                 "Recurrent policy is not implemented for the MLP controller"
