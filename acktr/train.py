@@ -118,6 +118,9 @@ class Trainer(object):
 
         actor_critic = self.agent.actor_critic
 
+        if self.use_g:
+            actor_critic.base.set_batches(processes)
+
         rollouts = RolloutStorage(self.num_steps, num_processes, obs_shape, envs.action_space, actor_critic.state_size)
         current_obs = torch.zeros(num_processes, *obs_shape)
 
@@ -225,6 +228,9 @@ class Trainer(object):
             self.set_lr(lr)
 
         actor_critic = self.agent.actor_critic
+
+        if self.use_g:
+            actor_critic.base.set_batches(processes)
 
         sonic_actions = SonicActionsVec(sonic_actions)
         sonic_actions = sonic_actions.discretize(self.actions)
