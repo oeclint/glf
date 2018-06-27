@@ -34,7 +34,8 @@ class Trainer(object):
         save_interval = 100,
         save_dir = 'trained_models',
         algo = 'acktr',
-        port = 8097):
+        port = 8097,
+        use_g = False):
         
         torch.manual_seed(seed)
 
@@ -55,6 +56,7 @@ class Trainer(object):
         self.use_gae = use_gae
         self.gamma = gamma
         self.tau = tau
+        self.use_g = use_g
         
         if self.cuda:
             torch.cuda.manual_seed(seed)
@@ -71,7 +73,7 @@ class Trainer(object):
 
     def make_agent(self, lr, obs_shape, action_space):
 
-        actor_critic = Policy(obs_shape, action_space, self.recurrent_policy, self.cuda)
+        actor_critic = Policy(obs_shape, action_space, self.recurrent_policy, self.cuda, self.use_g)
 
         self.agent = A2C_ACKTR(
             actor_critic,
