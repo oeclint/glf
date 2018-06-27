@@ -258,11 +258,11 @@ class Trainer(object):
                         actions = actions.cuda()
 
                     with torch.no_grad():
-                        value, critic_actions , _, states = actor_critic.act(
+                        value, critic_actions, action_log_prob, states = actor_critic.act(
                                 rollouts.observations[step],
                                 rollouts.states[step],
-                                rollouts.masks[step])
-                        action_log_prob = actor_critic.dist.log_probs(actions)
+                                rollouts.masks[step],
+                                actions)
                    
                     cpu_actions = actions.squeeze(1).cpu().numpy()
                     #supervised loss calculation
