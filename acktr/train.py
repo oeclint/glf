@@ -14,7 +14,7 @@ from baselines.logger import CSVOutputFormat
 
 class Trainer(object):
     def __init__(self, num_stack = 4,
-        recurrent_policy = True,
+        recurrent_policy = False,
         vis = False,
         value_loss_coef = 0.5,
         entropy_coef = 0.01,
@@ -93,9 +93,16 @@ class Trainer(object):
 
             raise RuntimeError('agent is not set')
    
-    def train(self,game,state,lr=7e-5,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10,record_dir='bk2s',record_interval=100):
+    def train(self,game_state,lr=1e-4,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10,record_dir='bk2s',record_interval=100):
 
-        processes = [(game,state)]*num_processes
+        chunks = [num_processes//len(game_state)]*len(game_state)
+        chunks[-1]+=num_processes-sum(chunks)
+
+        processes = []
+
+        for i, size in enumerate(chunks):
+            for j in range(size):
+                processes.append(game_state[i])
 
         envs = make_envs(processes,log_dir=log_dir,actions=self.actions,record_dir=record_dir, record_interval=record_interval)
 
@@ -191,7 +198,7 @@ class Trainer(object):
 
                 csvwriter.writekvs(kv)
 
-    def train_from_human(self,game_state,lr=7e-6,num_repeat=30,log_dir='log_human',play_path='human',scenario='contest'):
+    def train_from_human(self,game_state,lr=1e-6,num_repeat=30,log_dir='log_human',play_path='human',scenario='contest'):
 
         unique_actions, game_state_actions = actions_from_human_data(game_state, scenario, play_path)
         self.actions = unique_actions
@@ -220,7 +227,7 @@ class Trainer(object):
         sonic_actions = SonicActionsVec(sonic_actions)
         sonic_actions = sonic_actions.discretize(self.actions)
 
-        f = open('acc.txt', 'w')
+        csvwriter = CSVOutputFormat('loss.csv')
 
         for s in range(num_repeat):
 
@@ -251,22 +258,19 @@ class Trainer(object):
                         actions = actions.cuda()
 
                     with torch.no_grad():
-                        value, critic_actions , action_log_prob, states = actor_critic.supervised_act(
+                        value, critic_actions , _, states = actor_critic.act(
                                 rollouts.observations[step],
                                 rollouts.states[step],
-                                rollouts.masks[step],
-                                actions)
+                                rollouts.masks[step])
+                        action_log_prob = actor_critic.dist.log_probs(actions)
                    
                     cpu_actions = actions.squeeze(1).cpu().numpy()
-                    #weighted loss calculation
+                    #supervised loss calculation
                     for i,(act, true_act) in enumerate(zip(critic_actions,cpu_actions)):
                         if int(act) == int(true_act):
                             l = 0
                         else:
-                            if true_act == 1:
-                                l = 1
-                            else:
-                                l = 20
+                            l = 1
                         supervised_losses[step][i] = l                        
                      # Obser reward and next obs
                     obs, reward, done, info = envs.step(cpu_actions)
@@ -290,10 +294,8 @@ class Trainer(object):
                     update_current_obs(current_obs, obs, envs, self.num_stack)
                     rollouts.insert(current_obs, states, actions, action_log_prob, value, reward, masks)
 
-                    critic_actions = critic_actions.squeeze(1).cpu().numpy()
-                    expected_actions = cpu_actions
-
-                    f.write('step ' + str(s) + '>>>' + ','.join([str(a1) for a1 in critic_actions]) + '>>' + ','.join([str(a2) for a2 in expected_actions]) + '\n')
+                    #critic_actions = critic_actions.squeeze(1).cpu().numpy()
+                    #expected_actions = cpu_actions
               
                 with torch.no_grad():
                     next_value = actor_critic.get_value(rollouts.observations[-1],
@@ -301,17 +303,23 @@ class Trainer(object):
                                                         rollouts.masks[-1]).detach()
 
                 rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
-                supervised_loss = supervised_losses.mean()
-                
-                f.write('loss >>' + str(supervised_loss) + '\n')
 
                 value_loss, action_loss, dist_entropy = self.agent.update(rollouts)
 
                 rollouts.after_update()
 
-        f.close()
+                supervised_loss = supervised_losses.mean()
+
+                end = time.time()
+                
+                kv = OrderedMapping([("repeat", s),
+                                    ("loss", supervised_loss),
+                                    ("dt", (end - start))])
+
+                csvwriter.writekvs(kv)
+
 
 if __name__ == '__main__':
     t = Trainer()
     #t.train_from_human([('SonicTheHedgehog-Genesis','GreenHillZone.Act3')],play_path='../play/human')
-    t.train('SonicTheHedgehog-Genesis','GreenHillZone.Act3')
+    t.train([('SonicTheHedgehog-Genesis','GreenHillZone.Act3')])
