@@ -262,7 +262,7 @@ class Trainer(object):
                                 rollouts.observations[step],
                                 rollouts.states[step],
                                 rollouts.masks[step],
-                                actions)
+                                supervised_action=actions)
                    
                     cpu_actions = actions.squeeze(1).cpu().numpy()
                     #supervised loss calculation
