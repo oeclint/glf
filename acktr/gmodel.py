@@ -40,7 +40,7 @@ class G(nn.Module):
 
     @property
     def is_cuda(self):
-        return next(self.parameters()).is_cuda
+        return any(p.is_cuda for p in self.parameters())
     
     @property
     def batches(self):
@@ -48,7 +48,6 @@ class G(nn.Module):
 
     def set_batches(self, batches):
         g_set = len(self.g) > 0
-
         self._batches = batches
 
         for game_state in OrderedSet(batches):
