@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch
+import torch.nn.functional as F
 
 from glf.common.containers import OrderedSet
 
@@ -23,6 +24,8 @@ class G(nn.Module):
         wn = nn.utils.weight_norm
 
         self.cnn = cnn
+        self.output_size = cnn.output_size
+        self.state_size = cnn.state_size
         latent_size = cnn.output_size
 
         #key generation neural network
@@ -39,10 +42,12 @@ class G(nn.Module):
     def batches(self):
         return self._batches
 
-    def set_batches(self, batches):
+    def set_batches(self, batches, cuda=False):
         self._batches = batches
         for game_state in OrderedSet(batches):
             self.add_game_state(game_state)
+        if cuda:
+            self.g.cuda()
 
     def add_game_state(self, game_state):
         if game_state not in self.g_key:
@@ -69,15 +74,18 @@ class G(nn.Module):
 
         n_batch = len(self.batches)
 
-        if x.size(0) != n_batch:
-            raise ValueError('got batch size of {}, expected {}'.format(x.size(0),n_batch))
+        if x.size(0) % n_batch != 0:
+            raise ValueError('expected {} to be a multiple of {}'.format(x.size(0),n_batch))
 
+        n_step = x.size(0) // n_batch
+
+        n_batch = n_step * n_batch
         #generate a look-up key for the G memory. add an extra book-keeping dimension
         x = x.view(n_batch,-1)
         key = self.key_gen(x).unsqueeze(1).view(n_batch,1,self.key_size)
 
         #get stacked g's
-        gstack = self.gbatch()
+        gstack = self.gbatch().repeat(n_step,1,1)
 
         #dot the key into memory
         weights = torch.bmm(key,gstack).view(n_batch,self.g_size) 

@@ -34,7 +34,6 @@ class A2C_ACKTR(object):
         obs_shape = rollouts.observations.size()[2:]
         action_shape = rollouts.actions.size()[-1]
         num_steps, num_processes, _ = rollouts.rewards.size()
-
         values, action_log_probs, dist_entropy, states = self.actor_critic.evaluate_actions(
             rollouts.observations[:-1].view(-1, *obs_shape),
             rollouts.states[0].view(-1, self.actor_critic.state_size),
