@@ -39,15 +39,26 @@ class G(nn.Module):
         self.fuse = nn.Linear(latent_size+key_size,latent_size)
 
     @property
+    def is_cuda(self):
+        return next(self.parameters()).is_cuda
+    
+    @property
     def batches(self):
         return self._batches
 
-    def set_batches(self, batches, cuda=False):
+    def set_batches(self, batches):
+        g_set = len(self.g) > 0
+
         self._batches = batches
+
         for game_state in OrderedSet(batches):
             self.add_game_state(game_state)
-        if cuda:
-            self.g.cuda()
+
+        if not g_set:
+            # parameterlist does not register as cuda 
+            # if initialized as empty
+            if self.is_cuda:
+                self.g.cuda()
 
     def add_game_state(self, game_state):
         if game_state not in self.g_key:
