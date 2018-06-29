@@ -181,7 +181,7 @@ class Trainer(object):
 
             rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
 
-            value_loss, action_loss, dist_entropy, _, _ = self.agent.update(rollouts)
+            value_loss, action_loss, dist_entropy, _, total_loss = self.agent.update(rollouts)
 
             rollouts.after_update()
 
@@ -193,13 +193,14 @@ class Trainer(object):
                 kv = OrderedMapping([("updates", j),
                                   ("num timesteps", total_num_steps),
                                   ("FPS", int(total_num_steps / (end - start))),
-                                  ("mean reward", final_rewards.mean().tolist()),
-                                  ("median reward", final_rewards.median().tolist()),
-                                  ("min reward", final_rewards.min().tolist()),
-                                  ("max reward", final_rewards.max().tolist()),
-                                  ("entropy", dist_entropy),
-                                  ("value_loss", value_loss),
-                                  ("action_loss", action_loss)])
+                                  ("mean reward", final_rewards.mean().item()),
+                                  ("median reward", final_rewards.median().item()),
+                                  ("min reward", final_rewards.min().item()),
+                                  ("max reward", final_rewards.max().item()),
+                                  ("value loss", value_loss * self.agent.value_loss_coef),
+                                  ("action loss", action_loss),
+                                  ("dist entropy", dist_entropy * self.agent.entropy_coef),
+                                  ("total loss", total_loss)])
 
                 csvwriter.writekvs(kv)
 
@@ -278,7 +279,7 @@ class Trainer(object):
                             # probability it is correct
                             prob = p_correct
                         else:
-                            # assume all wrong choices is uniformily distributed
+                            # assume all wrong choices are uniformily distributed
                             prob = (1 - p_correct)/(n_actions-1)
 
                         supervised_prob[step][i] = prob  
@@ -314,15 +315,18 @@ class Trainer(object):
 
                 rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
 
-                value_loss, action_loss, dist_entropy, total_loss, log_prob_loss = self.agent.update(rollouts, supervised_prob)
+                value_loss, action_loss, dist_entropy, log_prob_loss, total_loss = self.agent.update(rollouts, supervised_prob)
 
                 rollouts.after_update()
 
                 end = time.time()
                 
                 kv = OrderedMapping([("repeat", s),
-                                    ("total loss", total_loss),
+                                    ("value loss", value_loss * self.agent.value_loss_coef),
+                                    ("action loss", action_loss),
+                                    ("dist entropy", dist_entropy * self.agent.entropy_coef),
                                     ("log prob loss", log_prob_loss),
+                                    ("total loss", total_loss),
                                     ("dt", (end - start))])
 
                 csvwriter.writekvs(kv)

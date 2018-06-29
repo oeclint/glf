@@ -85,4 +85,4 @@ class A2C_ACKTR(object):
 
         self.optimizer.step()
 
-        return value_loss.item(), action_loss.item(), dist_entropy.item(), total_loss.item(), log_prob_loss.item()
+        return value_loss.item(), action_loss.item(), dist_entropy.item(), log_prob_loss.item(), total_loss.item()
