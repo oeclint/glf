@@ -66,15 +66,17 @@ class A2C_ACKTR(object):
             self.optimizer.acc_stats = False
 
         self.optimizer.zero_grad()
+        total_loss = value_loss * self.value_loss_coef + action_loss - \
+             dist_entropy * self.entropy_coef
         if supervised_log_probs is None:
-            (value_loss * self.value_loss_coef + action_loss -
-             dist_entropy * self.entropy_coef).backward()
+            log_prob_loss = torch.zeros(1)[0]
         else:
             supervised_log_probs = supervised_log_probs.view(num_steps, num_processes, 1)
             log_prob_loss_fn = nn.KLDivLoss()
             log_prob_loss = log_prob_loss_fn(action_log_probs, supervised_log_probs)
-            (value_loss * self.value_loss_coef + action_loss -
-             dist_entropy * self.entropy_coef + log_prob_loss).backward()
+            total_loss = total_loss + log_prob_loss
+        
+        total_loss.backward()
 
         if self.acktr == False:
             nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
@@ -82,4 +84,4 @@ class A2C_ACKTR(object):
 
         self.optimizer.step()
 
-        return value_loss.item(), action_loss.item(), dist_entropy.item()
+        return value_loss.item(), action_loss.item(), dist_entropy.item(), total_loss, log_prob_loss

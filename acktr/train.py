@@ -1,6 +1,5 @@
 
 import torch
-import torch.nn as nn
 import numpy as np
 
 from glf.common.sonic_util import make_envs, SonicActionsVec, update_current_obs, actions_from_human_data
@@ -315,19 +314,18 @@ class Trainer(object):
 
                 rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
 
-                value_loss, action_loss, dist_entropy = self.agent.update(rollouts, supervised_log_prob)
+                value_loss, action_loss, dist_entropy, total_loss, log_prob_loss = self.agent.update(rollouts, supervised_log_prob)
 
                 rollouts.after_update()
 
-#                log_prob_loss_fn = nn.KLDivLoss()
-#                log_prob_loss = log_prob_loss_fn(action_log_prob, supervised_log_prob)
+                total_loss = total_loss.tolist()
+                log_prob_loss = log_prob_loss.tolist()
 
-#                log_prob_loss = log_prob_loss.tolist()
-                log_prob_loss = 0
                 end = time.time()
                 
                 kv = OrderedMapping([("repeat", s),
-                                    ("loss", log_prob_loss),
+                                    ("total loss", total_loss),
+                                    ("log prob loss", log_prob_loss),
                                     ("dt", (end - start))])
 
                 csvwriter.writekvs(kv)
