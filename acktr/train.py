@@ -1,5 +1,6 @@
 
 import torch
+import torch.nn as nn
 import numpy as np
 
 from glf.common.sonic_util import make_envs, SonicActionsVec, update_current_obs, actions_from_human_data
@@ -318,11 +319,11 @@ class Trainer(object):
 
                 rollouts.after_update()
 
-                log_prob_loss_fn = nn.KLDivLoss()
-                log_prob_loss = log_prob_loss_fn(action_log_prob, supervised_log_prob)
+#                log_prob_loss_fn = nn.KLDivLoss()
+#                log_prob_loss = log_prob_loss_fn(action_log_prob, supervised_log_prob)
 
-                log_prob_loss = log_prob_loss.tolist()
-
+#                log_prob_loss = log_prob_loss.tolist()
+                log_prob_loss = 0
                 end = time.time()
                 
                 kv = OrderedMapping([("repeat", s),
