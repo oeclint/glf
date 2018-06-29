@@ -70,7 +70,7 @@ class A2C_ACKTR(object):
              dist_entropy * self.entropy_coef
  
         if supervised_probs is None:
-            log_prob_loss = torch.zeros(1)[0]
+            log_prob_loss = torch.zeros(1)
         else:
             supervised_probs = supervised_probs.view(num_steps, num_processes, 1)
             log_prob_loss_fn = nn.KLDivLoss()
@@ -85,4 +85,4 @@ class A2C_ACKTR(object):
 
         self.optimizer.step()
 
-        return value_loss.item(), action_loss.item(), dist_entropy.item(), total_loss, log_prob_loss
+        return value_loss.item(), action_loss.item(), dist_entropy.item(), total_loss.item(), log_prob_loss.item()

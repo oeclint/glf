@@ -318,9 +318,6 @@ class Trainer(object):
 
                 rollouts.after_update()
 
-                total_loss = total_loss.tolist()
-                log_prob_loss = log_prob_loss.tolist()
-
                 end = time.time()
                 
                 kv = OrderedMapping([("repeat", s),
