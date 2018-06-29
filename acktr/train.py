@@ -246,14 +246,14 @@ class Trainer(object):
             update_current_obs(current_obs, obs, envs, self.num_stack)
             rollouts.observations[0].copy_(current_obs)
 
-            supervised_log_prob = torch.zeros(self.num_steps, num_processes, 1)
+            supervised_prob = torch.zeros(self.num_steps, num_processes, 1)
             # These variables are used to compute average rewards for all processes.
             episode_rewards = torch.zeros([num_processes, 1])
             final_rewards = torch.zeros([num_processes, 1])
 
             if self.cuda:
                 current_obs = current_obs.cuda()
-                supervised_log_prob = supervised_log_prob.cuda()
+                supervised_prob = supervised_prob.cuda()
                 rollouts.cuda()
 
             start = time.time()
@@ -281,7 +281,7 @@ class Trainer(object):
                             # assume all wrong choices is uniformily distributed
                             prob = (1 - p_correct)/(n_actions-1)
 
-                        supervised_log_prob[step][i] = np.log(prob)  
+                        supervised_prob[step][i] = prob  
 
                     cpu_actions = actions.squeeze(1).cpu().numpy()                      
                      # Obser reward and next obs
@@ -314,7 +314,7 @@ class Trainer(object):
 
                 rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
 
-                value_loss, action_loss, dist_entropy, total_loss, log_prob_loss = self.agent.update(rollouts, supervised_log_prob)
+                value_loss, action_loss, dist_entropy, total_loss, log_prob_loss = self.agent.update(rollouts, supervised_prob)
 
                 rollouts.after_update()
 

@@ -30,7 +30,7 @@ class A2C_ACKTR(object):
             self.optimizer = optim.RMSprop(
                 actor_critic.parameters(), lr, eps=eps, alpha=alpha)
 
-    def update(self, rollouts, supervised_log_probs=None):
+    def update(self, rollouts, supervised_probs=None):
         obs_shape = rollouts.observations.size()[2:]
         action_shape = rollouts.actions.size()[-1]
         num_steps, num_processes, _ = rollouts.rewards.size()
@@ -68,12 +68,13 @@ class A2C_ACKTR(object):
         self.optimizer.zero_grad()
         total_loss = value_loss * self.value_loss_coef + action_loss - \
              dist_entropy * self.entropy_coef
-        if supervised_log_probs is None:
+ 
+        if supervised_probs is None:
             log_prob_loss = torch.zeros(1)[0]
         else:
-            supervised_log_probs = supervised_log_probs.view(num_steps, num_processes, 1)
+            supervised_probs = supervised_probs.view(num_steps, num_processes, 1)
             log_prob_loss_fn = nn.KLDivLoss()
-            log_prob_loss = log_prob_loss_fn(action_log_probs, supervised_log_probs)
+            log_prob_loss = log_prob_loss_fn(action_log_probs, supervised_probs)
             total_loss = total_loss + log_prob_loss
         
         total_loss.backward()
