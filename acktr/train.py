@@ -203,7 +203,7 @@ class Trainer(object):
 
                 csvwriter.writekvs(kv)
 
-    def train_from_human(self,game_state,lr=1e-6,num_repeat=30,log_dir='log_human',play_path='human',scenario='contest'):
+    def train_from_human(self,game_state,lr=1e-6,num_repeat=30,log_dir='log_human',play_path='human',scenario='contest',p_correct=0.95):
 
         unique_actions, game_state_actions = actions_from_human_data(game_state, scenario, play_path)
         self.actions = unique_actions
@@ -246,14 +246,14 @@ class Trainer(object):
             update_current_obs(current_obs, obs, envs, self.num_stack)
             rollouts.observations[0].copy_(current_obs)
 
-            supervised_losses = torch.zeros(self.num_steps, num_processes, 1)
+            supervised_log_prob = torch.zeros(self.num_steps, num_processes, 1)
             # These variables are used to compute average rewards for all processes.
             episode_rewards = torch.zeros([num_processes, 1])
             final_rewards = torch.zeros([num_processes, 1])
 
             if self.cuda:
                 current_obs = current_obs.cuda()
-                supervised_losses = supervised_losses.cuda()
+                supervised_log_prob = supervised_log_prob.cuda()
                 rollouts.cuda()
 
             start = time.time()
@@ -269,17 +269,21 @@ class Trainer(object):
                         value, critic_actions, action_log_prob, states = actor_critic.act(
                                 rollouts.observations[step],
                                 rollouts.states[step],
-                                rollouts.masks[step],
-                                supervised_action=actions)
+                                rollouts.masks[step])
                    
-                    cpu_actions = actions.squeeze(1).cpu().numpy()
-                    #supervised loss calculation
-                    for i,(act, true_act) in enumerate(zip(critic_actions,cpu_actions)):
+                    #supervised log prob calculation
+                    n_actions = len(self.actions)
+                    for i,(act, true_act) in enumerate(zip(critic_actions,actions)):
                         if int(act) == int(true_act):
-                            l = 0
+                            # probability it is correct
+                            prob = p_correct
                         else:
-                            l = 1
-                        supervised_losses[step][i] = l                        
+                            # assume all wrong choices is uniformily distributed
+                            prob = (1 - p_correct)/(n_actions-1)
+
+                        supervised_log_prob[step][i] = np.log(prob)  
+
+                    cpu_actions = actions.squeeze(1).cpu().numpy()                      
                      # Obser reward and next obs
                     obs, reward, done, info = envs.step(cpu_actions)
                     reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
@@ -302,9 +306,6 @@ class Trainer(object):
                     update_current_obs(current_obs, obs, envs, self.num_stack)
 
                     rollouts.insert(current_obs, states, actions, action_log_prob, value, reward, masks)
-
-                    #critic_actions = critic_actions.squeeze(1).cpu().numpy()
-                    #expected_actions = cpu_actions
               
                 with torch.no_grad():
                     next_value = actor_critic.get_value(rollouts.observations[-1],
@@ -313,16 +314,19 @@ class Trainer(object):
 
                 rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
 
-                value_loss, action_loss, dist_entropy = self.agent.update(rollouts)
+                value_loss, action_loss, dist_entropy = self.agent.update(rollouts, supervised_log_prob)
 
                 rollouts.after_update()
 
-                supervised_loss = supervised_losses.mean().tolist()
+                log_prob_loss_fn = nn.KLDivLoss()
+                log_prob_loss = log_prob_loss_fn(action_log_prob, supervised_log_prob)
+
+                log_prob_loss = log_prob_loss.tolist()
 
                 end = time.time()
                 
                 kv = OrderedMapping([("repeat", s),
-                                    ("loss", supervised_loss),
+                                    ("loss", log_prob_loss),
                                     ("dt", (end - start))])
 
                 csvwriter.writekvs(kv)
