@@ -181,7 +181,7 @@ class Trainer(object):
 
             rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
 
-            value_loss, action_loss, dist_entropy = self.agent.update(rollouts)
+            value_loss, action_loss, dist_entropy, _, _ = self.agent.update(rollouts)
 
             rollouts.after_update()
 
