@@ -47,6 +47,7 @@ class Trainer(object):
 
         self.recurrent_policy = recurrent_policy
         self.value_loss_coef = value_loss_coef
+        self.log_prob_loss_coef = log_prob_loss_coef
         self.entropy_coef = entropy_coef 
         self.alpha = alpha
         self.eps = eps
@@ -80,7 +81,7 @@ class Trainer(object):
             actor_critic = actor_critic,
             value_loss_coef = self.value_loss_coef,
             entropy_coef = self.entropy_coef,
-            log_prob_loss_coef = self.log_prob_loss_coef
+            log_prob_loss_coef = self.log_prob_loss_coef,
             lr = lr,
             alpha = self.alpha,
             eps = self.eps,
