@@ -10,6 +10,7 @@ class A2C_ACKTR(object):
                  actor_critic,
                  value_loss_coef,
                  entropy_coef,
+                 log_prob_loss_coef=1,
                  lr=None,
                  eps=None,
                  alpha=None,
@@ -21,6 +22,7 @@ class A2C_ACKTR(object):
 
         self.value_loss_coef = value_loss_coef
         self.entropy_coef = entropy_coef
+        self.log_prob_loss_coef = log_prob_loss_coef
 
         self.max_grad_norm = max_grad_norm
 
@@ -46,7 +48,12 @@ class A2C_ACKTR(object):
         advantages = rollouts.returns[:-1] - values
         value_loss = advantages.pow(2).mean()
 
-        action_loss = -(advantages.detach() * action_log_probs).mean()
+        if supervised_probs is not None:
+            supervised_probs = supervised_probs.view(num_steps, num_processes, 1)
+            log_prob_loss_fn = nn.KLDivLoss()
+            action_loss = self.log_prob_loss_coef*log_prob_loss_fn(action_log_probs, supervised_probs)
+        else:
+            action_loss = -(advantages.detach() * action_log_probs).mean()
 
         if self.acktr and self.optimizer.steps % self.optimizer.Ts == 0:
             # Sampled fisher, see Martens 2014
@@ -66,18 +73,8 @@ class A2C_ACKTR(object):
             self.optimizer.acc_stats = False
 
         self.optimizer.zero_grad()
-        total_loss = value_loss * self.value_loss_coef + action_loss - \
-             dist_entropy * self.entropy_coef
- 
-        if supervised_probs is None:
-            log_prob_loss = torch.zeros(1)
-        else:
-            supervised_probs = supervised_probs.view(num_steps, num_processes, 1)
-            log_prob_loss_fn = nn.KLDivLoss()
-            log_prob_loss = log_prob_loss_fn(action_log_probs, supervised_probs)
-            total_loss = total_loss + log_prob_loss
-        
-        total_loss.backward()
+        (value_loss * self.value_loss_coef + action_loss - \
+             dist_entropy * self.entropy_coef).backward()
 
         if self.acktr == False:
             nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
@@ -85,4 +82,4 @@ class A2C_ACKTR(object):
 
         self.optimizer.step()
 
-        return value_loss.item(), action_loss.item(), dist_entropy.item(), log_prob_loss.item(), total_loss.item()
+        return value_loss.item(), action_loss.item(), dist_entropy.item()

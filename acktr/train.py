@@ -18,6 +18,7 @@ class Trainer(object):
         vis = False,
         value_loss_coef = 0.5,
         entropy_coef = 0.01,
+        log_prob_loss_coef = 1,
         alpha = 0.99,
         eps = 1e-5,
         max_grad_norm = 0.5,
@@ -76,9 +77,10 @@ class Trainer(object):
         actor_critic = Policy(obs_shape, action_space, self.recurrent_policy, self.cuda, self.use_g)
 
         self.agent = A2C_ACKTR(
-            actor_critic,
-            self.value_loss_coef,
-            self.entropy_coef,
+            actor_critic = actor_critic,
+            value_loss_coef = self.value_loss_coef,
+            entropy_coef = self.entropy_coef,
+            log_prob_loss_coef = self.log_prob_loss_coef
             lr = lr,
             alpha = self.alpha,
             eps = self.eps,
@@ -181,7 +183,7 @@ class Trainer(object):
 
             rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
 
-            value_loss, action_loss, dist_entropy, _, total_loss = self.agent.update(rollouts)
+            value_loss, action_loss, dist_entropy = self.agent.update(rollouts)
 
             rollouts.after_update()
 
@@ -199,12 +201,12 @@ class Trainer(object):
                                   ("max reward", final_rewards.max().item()),
                                   ("value loss", value_loss * self.agent.value_loss_coef),
                                   ("action loss", action_loss),
-                                  ("dist entropy", dist_entropy * self.agent.entropy_coef),
-                                  ("total loss", total_loss)])
+                                  ("dist entropy", dist_entropy * self.agent.entropy_coef)])
 
                 csvwriter.writekvs(kv)
 
-    def train_from_human(self,game_state,lr=1e-6,num_repeat=30,log_dir='log_human',play_path='human',scenario='contest',p_correct=0.95):
+    def train_from_human(self,game_state,lr=1e-6,num_repeat=30,log_dir='log_human',
+        play_path='human',scenario='contest',p_correct=0.95):
 
         unique_actions, game_state_actions = actions_from_human_data(game_state, scenario, play_path)
         self.actions = unique_actions
@@ -315,7 +317,7 @@ class Trainer(object):
 
                 rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
 
-                value_loss, action_loss, dist_entropy, log_prob_loss, total_loss = self.agent.update(rollouts, supervised_prob)
+                value_loss, action_loss, dist_entropy = self.agent.update(rollouts, supervised_prob)
 
                 rollouts.after_update()
 
@@ -325,8 +327,6 @@ class Trainer(object):
                                     ("value loss", value_loss * self.agent.value_loss_coef),
                                     ("action loss", action_loss),
                                     ("dist entropy", dist_entropy * self.agent.entropy_coef),
-                                    ("log prob loss", log_prob_loss),
-                                    ("total loss", total_loss),
                                     ("dt", (end - start))])
 
                 csvwriter.writekvs(kv)
