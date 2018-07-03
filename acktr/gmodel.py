@@ -6,37 +6,41 @@ from glf.common.containers import OrderedSet
 
 class G(nn.Module):
     
-    def __init__(self, cnn, batches=None, key_size=128, g_size=20):
+    def __init__(self, cnn, batches=None, key_size=128, g_size=20, one_g = False):
         super(G, self).__init__()
 
         if batches==None:
             batches = []
 
-        self.g_key = OrderedSet(batches)
-
-        self.g = nn.ParameterList([nn.Parameter(torch.randn(key_size, g_size)) for gs in self.g_key])
+        if not one_g:
+            self.g_key = OrderedSet(batches)
+            self.g = nn.ParameterList([nn.Parameter(torch.randn(key_size, g_size)) for gs in self.g_key])
+        else:
+            self.g_key = OrderedSet(['default'])
+            self.g = nn.ParameterList([nn.Parameter(torch.randn(key_size, g_size)) for gs in self.g_key])
 
         self._batches = batches
 
         self.key_size = key_size
         self.g_size = g_size
 
+        self.one_g = one_g
+
         wn = nn.utils.weight_norm
 
         self.cnn = cnn
         self.output_size = cnn.output_size
         self.state_size = cnn.state_size
-        latent_size = cnn.output_size
 
         #key generation neural network
         self.key_gen = nn.Sequential(
-            wn(nn.Linear(latent_size,latent_size)),
+            wn(nn.Linear(cnn.output_size,cnn.output_size)),
             nn.ELU(),
-            wn(nn.Linear(latent_size,latent_size)),
+            wn(nn.Linear(cnn.output_size,cnn.output_size)),
             nn.ELU(),
-            wn(nn.Linear(latent_size,key_size)))
+            wn(nn.Linear(cnn.output_size,key_size)))
 
-        self.fuse = nn.Linear(latent_size+key_size,latent_size)
+        self.fuse = nn.Linear(cnn.output_size+key_size,cnn.output_size)
 
     @property
     def is_cuda(self):
@@ -60,9 +64,10 @@ class G(nn.Module):
                 self.g.cuda()
 
     def add_game_state(self, game_state):
-        if game_state not in self.g_key:
-            self.g_key.add(game_state)
-            self.g.append(nn.Parameter(torch.randn(self.key_size, self.g_size)))
+        if not self.one_g:
+            if game_state not in self.g_key:
+                self.g_key.add(game_state)
+                self.g.append(nn.Parameter(torch.randn(self.key_size, self.g_size)))
 
     def gbatch(self):
 
@@ -72,6 +77,9 @@ class G(nn.Module):
         for game_state in self._batches:
             if game_state in self.g_key:
                 ind = key_list.index(game_state)
+                glist.append(self.g[ind])
+            elif 'default' in self.g_key:
+                ind = key_list.index('default')
                 glist.append(self.g[ind])
             else:
                 raise KeyError('{} not found'.format(game_state))
