@@ -10,7 +10,6 @@ class A2C_ACKTR(object):
                  actor_critic,
                  value_loss_coef,
                  entropy_coef,
-                 log_prob_loss_coef=1,
                  lr=None,
                  eps=None,
                  alpha=None,
@@ -22,7 +21,6 @@ class A2C_ACKTR(object):
 
         self.value_loss_coef = value_loss_coef
         self.entropy_coef = entropy_coef
-        self.log_prob_loss_coef = log_prob_loss_coef
 
         self.max_grad_norm = max_grad_norm
 
@@ -48,13 +46,6 @@ class A2C_ACKTR(object):
         advantages = rollouts.returns[:-1] - values
         value_loss = advantages.pow(2).mean()
 
-        if supervised_probs is not None:
-            supervised_probs = supervised_probs.view(num_steps, num_processes, 1)
-            log_prob_loss_fn = nn.KLDivLoss()
-            action_loss = self.log_prob_loss_coef*log_prob_loss_fn(action_log_probs, supervised_probs)
-        else:
-            action_loss = -(advantages.detach() * action_log_probs).mean()
-
         if self.acktr and self.optimizer.steps % self.optimizer.Ts == 0:
             # Sampled fisher, see Martens 2014
             self.actor_critic.zero_grad()
@@ -73,8 +64,15 @@ class A2C_ACKTR(object):
             self.optimizer.acc_stats = False
 
         self.optimizer.zero_grad()
-        (value_loss * self.value_loss_coef + action_loss - \
-             dist_entropy * self.entropy_coef).backward()
+        if supervised_probs is not None:
+            supervised_probs = supervised_probs.view(num_steps, num_processes, 1)
+            log_prob_loss_fn = nn.KLDivLoss()
+            action_loss = log_prob_loss_fn(action_log_probs, supervised_probs)
+            action_loss.backward()
+        else:
+            action_loss = -(advantages.detach() * action_log_probs).mean()
+            (value_loss * self.value_loss_coef + action_loss - \
+                 dist_entropy * self.entropy_coef).backward()
 
         if self.acktr == False:
             nn.utils.clip_grad_norm_(self.actor_critic.parameters(),

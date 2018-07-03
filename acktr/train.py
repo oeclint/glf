@@ -18,7 +18,6 @@ class Trainer(object):
         vis = False,
         value_loss_coef = 0.5,
         entropy_coef = 0.01,
-        log_prob_loss_coef = 1,
         alpha = 0.99,
         eps = 1e-5,
         max_grad_norm = 0.5,
@@ -47,7 +46,6 @@ class Trainer(object):
 
         self.recurrent_policy = recurrent_policy
         self.value_loss_coef = value_loss_coef
-        self.log_prob_loss_coef = log_prob_loss_coef
         self.entropy_coef = entropy_coef 
         self.alpha = alpha
         self.eps = eps
@@ -81,7 +79,6 @@ class Trainer(object):
             actor_critic = actor_critic,
             value_loss_coef = self.value_loss_coef,
             entropy_coef = self.entropy_coef,
-            log_prob_loss_coef = self.log_prob_loss_coef,
             lr = lr,
             alpha = self.alpha,
             eps = self.eps,
@@ -325,9 +322,7 @@ class Trainer(object):
                 end = time.time()
                 
                 kv = OrderedMapping([("repeat", s),
-                                    ("value loss", value_loss * self.agent.value_loss_coef),
                                     ("action loss", action_loss),
-                                    ("dist entropy", dist_entropy * self.agent.entropy_coef),
                                     ("dt", (end - start))])
 
                 csvwriter.writekvs(kv)
