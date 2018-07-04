@@ -57,11 +57,10 @@ class G(nn.Module):
         for game_state in OrderedSet(batches):
             self.add_game_state(game_state)
 
-        if not g_set:
-            # parameterlist does not register as cuda 
-            # if initialized as empty
-            if self.is_cuda:
-                self.g.cuda()
+        # parameterlist does not register as cuda 
+        # if initialized as empty
+        if self.is_cuda:
+            self.g.cuda()
 
     def add_game_state(self, game_state):
         if not self.one_g:
