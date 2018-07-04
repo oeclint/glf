@@ -13,11 +13,11 @@ class G(nn.Module):
             batches = []
 
         if not one_g:
-            self.g_key = OrderedSet(batches)
-            self.g = nn.ParameterList([nn.Parameter(torch.randn(key_size, g_size)) for gs in self.g_key])
+            self._gkey = OrderedSet(batches)
+            self._gmat = nn.ParameterList([nn.Parameter(torch.randn(key_size, g_size)) for gs in self._gkey])
         else:
-            self.g_key = OrderedSet(['default'])
-            self.g = nn.ParameterList([nn.Parameter(torch.randn(key_size, g_size)) for gs in self.g_key])
+            self._gkey = OrderedSet(['default'])
+            self._gmat = nn.ParameterList([nn.Parameter(torch.randn(key_size, g_size)) for gs in self._gkey])
 
         self._batches = batches
 
@@ -51,7 +51,7 @@ class G(nn.Module):
         return self._batches
 
     def set_batches(self, batches):
-        g_set = len(self.g) > 0
+        g_set = len(self._gmat) > 0
         self._batches = batches
 
         for game_state in OrderedSet(batches):
@@ -60,26 +60,26 @@ class G(nn.Module):
         # parameterlist does not register as cuda 
         # if initialized as empty
         if self.is_cuda:
-            self.g.cuda()
+            self._gmat.cuda()
 
     def add_game_state(self, game_state):
         if not self.one_g:
-            if game_state not in self.g_key:
-                self.g_key.add(game_state)
-                self.g.append(nn.Parameter(torch.randn(self.key_size, self.g_size)))
+            if game_state not in self._gkey:
+                self._gkey.add(game_state)
+                self._gmat.append(nn.Parameter(torch.randn(self.key_size, self.g_size)))
 
     def gbatch(self):
 
         glist = []
-        key_list = list(self.g_key)
+        key_list = list(self._gkey)
 
         for game_state in self._batches:
-            if game_state in self.g_key:
+            if game_state in self._gkey:
                 ind = key_list.index(game_state)
-                glist.append(self.g[ind])
-            elif 'default' in self.g_key:
+                glist.append(self._gmat[ind])
+            elif 'default' in self._gkey:
                 ind = key_list.index('default')
-                glist.append(self.g[ind])
+                glist.append(self._gmat[ind])
             else:
                 raise KeyError('{} not found'.format(game_state))
 
