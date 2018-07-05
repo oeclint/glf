@@ -124,7 +124,7 @@ class Trainer(object):
 
         actor_critic = self.agent.actor_critic
 
-        if self.use_g:
+        if self.gmat is not None:
             actor_critic.base.set_batches(processes)
 
         rollouts = RolloutStorage(self.num_steps, num_processes, obs_shape, envs.action_space, actor_critic.state_size)
@@ -236,7 +236,7 @@ class Trainer(object):
 
         actor_critic = self.agent.actor_critic
 
-        if self.use_g:
+        if self.gmat is not None:
             actor_critic.base.set_batches(processes)
 
         sonic_actions = SonicActionsVec(sonic_actions)
