@@ -6,20 +6,20 @@ from glf.common.containers import OrderedSet
 
 class G(nn.Module):
     
-    def __init__(self, cnn, batches=None, key_size=128, g_size=20, one_g = False):
+    def __init__(self, cnn, games=None, key_size=128, g_size=20, one_g = False):
         super(G, self).__init__()
 
-        if batches==None:
-            batches = []
+        if games==None:
+            games = []
 
         if not one_g:
-            self._gkey = OrderedSet(batches)
+            self._gkey = OrderedSet(games)
             self._gmat = nn.ParameterList([nn.Parameter(torch.randn(key_size, g_size)) for gs in self._gkey])
         else:
             self._gkey = OrderedSet(['default'])
             self._gmat = nn.ParameterList([nn.Parameter(torch.randn(key_size, g_size)) for gs in self._gkey])
 
-        self._batches = batches
+        self._batches = []
 
         self.key_size = key_size
         self.g_size = g_size
@@ -51,7 +51,7 @@ class G(nn.Module):
         return self._batches
 
     def set_batches(self, batches):
-        g_set = len(self._gmat) > 0
+
         self._batches = batches
 
         for game_state in OrderedSet(batches):
@@ -91,31 +91,33 @@ class G(nn.Module):
 
         n_batch = len(self.batches)
 
-        if x.size(0) % n_batch != 0:
-            raise ValueError('expected {} to be a multiple of {}'.format(x.size(0),n_batch))
+        if n_batch:
 
-        n_step = x.size(0) // n_batch
+            if x.size(0) % n_batch != 0:
+                raise ValueError('expected {} to be a multiple of {}'.format(x.size(0),n_batch))
 
-        n_batch = n_step * n_batch
-        #generate a look-up key for the G memory. add an extra book-keeping dimension
-        x = x.view(n_batch,-1)
-        key = self.key_gen(x).unsqueeze(1).view(n_batch,1,self.key_size)
+            n_step = x.size(0) // n_batch
 
-        #get stacked g's
-        gstack = self.gbatch().repeat(n_step,1,1)
+            n_batch = n_step * n_batch
+            #generate a look-up key for the G memory. add an extra book-keeping dimension
+            x = x.view(n_batch,-1)
+            key = self.key_gen(x).unsqueeze(1).view(n_batch,1,self.key_size)
 
-        #dot the key into memory
-        weights = torch.bmm(key,gstack).view(n_batch,self.g_size) 
-        #take softmax to get weights for each entry in the memory (the lookup)
-        weights = F.softmax(weights,dim=1).view(n_batch,1,self.g_size) 
+            #get stacked g's
+            gstack = self.gbatch().repeat(n_step,1,1)
 
-        #do a weighted sum of all of the columns
-        value = self.g_size*F.adaptive_avg_pool1d(gstack*weights.expand(n_batch,self.key_size,self.g_size),1)
-        value = value.view(n_batch,self.key_size)
+            #dot the key into memory
+            weights = torch.bmm(key,gstack).view(n_batch,self.g_size) 
+            #take softmax to get weights for each entry in the memory (the lookup)
+            weights = F.softmax(weights,dim=1).view(n_batch,1,self.g_size) 
 
-        #combine the result of the lookup with the latent state vector
-        combination = torch.cat([x,value],dim=1)
-        x = self.fuse(combination)
+            #do a weighted sum of all of the columns
+            value = self.g_size*F.adaptive_avg_pool1d(gstack*weights.expand(n_batch,self.key_size,self.g_size),1)
+            value = value.view(n_batch,self.key_size)
+
+            #combine the result of the lookup with the latent state vector
+            combination = torch.cat([x,value],dim=1)
+            x = self.fuse(combination)
 
         #return policy decision
         return self.cnn.critic_linear(x), x, states

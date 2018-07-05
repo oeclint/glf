@@ -13,7 +13,8 @@ from baselines.logger import CSVOutputFormat
 
 
 class Trainer(object):
-    def __init__(self, num_stack = 4,
+    def __init__(self, 
+        num_stack = 4,
         recurrent_policy = False,
         vis = False,
         value_loss_coef = 0.5,
@@ -35,7 +36,7 @@ class Trainer(object):
         save_dir = 'trained_models',
         algo = 'acktr',
         port = 8097,
-        use_g = False):
+        gmat = None):
         
         torch.manual_seed(seed)
 
@@ -56,7 +57,7 @@ class Trainer(object):
         self.use_gae = use_gae
         self.gamma = gamma
         self.tau = tau
-        self.use_g = use_g
+        self.gmat = gmat
         
         if self.cuda:
             torch.cuda.manual_seed(seed)
@@ -73,7 +74,12 @@ class Trainer(object):
 
     def make_agent(self, lr, obs_shape, action_space):
 
-        actor_critic = Policy(obs_shape, action_space, self.recurrent_policy, self.cuda, self.use_g)
+        if self.gmat is not None:
+
+            actor_critic = Policy(obs_shape, action_space, self.recurrent_policy, self.cuda, self.gmat)
+
+        else:
+            actor_critic = Policy(obs_shape, action_space, self.recurrent_policy, self.cuda)
 
         self.agent = A2C_ACKTR(
             actor_critic = actor_critic,

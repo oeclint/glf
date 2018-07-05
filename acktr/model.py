@@ -12,15 +12,15 @@ class Flatten(nn.Module):
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_shape, action_space, recurrent_policy, cuda=False, g=False, temp = 1):
+    def __init__(self, obs_shape, action_space, recurrent_policy, cuda=False, games=None, temp = 1):
         super(Policy, self).__init__()
         if len(obs_shape) == 3:
-            if not g:
+            if games is None:
                 self.base = CNNBase(obs_shape[0], recurrent_policy)
                 self.base_target = CNNBase(obs_shape[0], recurrent_policy)
             else:
-                self.base = G(CNNBase(obs_shape[0], recurrent_policy))
-                self.base_target = G(CNNBase(obs_shape[0], recurrent_policy))
+                self.base = G(CNNBase(obs_shape[0], recurrent_policy),games)
+                self.base_target = G(CNNBase(obs_shape[0], recurrent_policy),games)
         elif len(obs_shape) == 1:
             assert not recurrent_policy, \
                 "Recurrent policy is not implemented for the MLP controller"
@@ -43,6 +43,10 @@ class Policy(nn.Module):
 
         self.step = 0
         self.base_target.load_state_dict(self.base.state_dict())
+        self.dist_target.load_state_dict(self.dist.state_dict())
+
+        self.base_target.eval()
+        self.dist_target.eval()
 
         if cuda:
             self.base.cuda()
