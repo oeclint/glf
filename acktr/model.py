@@ -31,9 +31,11 @@ class Policy(nn.Module):
         if action_space.__class__.__name__ == "Discrete":
             num_outputs = action_space.n
             self.dist = Categorical(self.base.output_size, num_outputs, temp = temp)
+            self.dist_target = Categorical(self.base.output_size, num_outputs, temp = temp)
         elif action_space.__class__.__name__ == "Box":
             num_outputs = action_space.shape[0]
             self.dist = DiagGaussian(self.base.output_size, num_outputs)
+            self.dist_target = DiagGaussian(self.base.output_size, num_outputs)
         else:
             raise NotImplementedError
 
@@ -46,6 +48,7 @@ class Policy(nn.Module):
             self.base.cuda()
             self.dist.cuda()
             self.base_target.cuda()
+            self.dist_target.cuda()
 
 
     def forward(self, inputs, states, masks):
@@ -53,7 +56,7 @@ class Policy(nn.Module):
 
     def act(self, inputs, states, masks, deterministic=False):
         value, actor_features, states = self.base_target(inputs, states, masks)
-        dist = self.dist(actor_features)
+        dist = self.dist_target(actor_features)
 
         if deterministic:
             action = dist.mode()
@@ -81,6 +84,7 @@ class Policy(nn.Module):
 
         if self.step%update_step == 0:
             self.base_target.load_state_dict(self.base.state_dict())
+            self.dist_target.load_state_dict(self.dist.state_dict())
 
         return value, action_log_probs, dist_entropy, states
 
