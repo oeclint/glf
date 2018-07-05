@@ -15,11 +15,12 @@ class Policy(nn.Module):
     def __init__(self, obs_shape, action_space, recurrent_policy, cuda=False, g=False, temp = 1):
         super(Policy, self).__init__()
         if len(obs_shape) == 3:
-            cnnbase = CNNBase(obs_shape[0], recurrent_policy)
             if not g:
-                self.base = cnnbase
+                self.base = CNNBase(obs_shape[0], recurrent_policy)
+                self.base_target = CNNBase(obs_shape[0], recurrent_policy)
             else:
-                self.base = G(cnnbase)
+                self.base = G(CNNBase(obs_shape[0], recurrent_policy))
+                self.base_target = G(CNNBase(obs_shape[0], recurrent_policy))
         elif len(obs_shape) == 1:
             assert not recurrent_policy, \
                 "Recurrent policy is not implemented for the MLP controller"
@@ -37,15 +38,21 @@ class Policy(nn.Module):
             raise NotImplementedError
 
         self.state_size = self.base.state_size
+
+        self.step = 0
+        self.base_target.load_state_dict(self.base.state_dict())
+
         if cuda:
             self.base.cuda()
             self.dist.cuda()
+            self.base_target.cuda()
+
 
     def forward(self, inputs, states, masks):
         raise NotImplementedError
 
     def act(self, inputs, states, masks, deterministic=False):
-        value, actor_features, states = self.base(inputs, states, masks)
+        value, actor_features, states = self.base_target(inputs, states, masks)
         dist = self.dist(actor_features)
 
         if deterministic:
@@ -57,18 +64,23 @@ class Policy(nn.Module):
 
         dist_entropy = dist.entropy().mean()
 
+        self.step+=1
+
         return value, action, action_log_probs, states
 
     def get_value(self, inputs, states, masks):
         value, _, _ = self.base(inputs, states, masks)
         return value
 
-    def evaluate_actions(self, inputs, states, masks, action):
+    def evaluate_actions(self, inputs, states, masks, action, update_step = 50):
         value, actor_features, states = self.base(inputs, states, masks)
         dist = self.dist(actor_features)
 
         action_log_probs = dist.log_probs(action)
         dist_entropy = dist.entropy().mean()
+
+        if self.step%update_step == 0:
+            self.base_target.load_state_dict(self.base.state_dict())
 
         return value, action_log_probs, dist_entropy, states
 
