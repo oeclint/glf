@@ -204,9 +204,10 @@ class Trainer(object):
                 csvwriter.writekvs(kv)
 
     def train_from_human(self,game_state,lr=1e-3,num_frames=10e6,log_dir='log_human',log_interval=10,
-        play_path='human',scenario='contest',p_correct=0.95):
+        record_dir='bk2s',record_interval=1,play_path='human',scenario='contest',p_correct=0.95):
 
-        maker = EnvMaker.from_human_play(game_state=game_state, play_path=play_path, scenario=scenario, log_dir=log_dir)
+        maker = EnvMaker.from_human_play(game_state=game_state, play_path=play_path, scenario=scenario, log_dir=log_dir,
+            record_dir=record_dir,record_interval=record_interval)
         envs = maker.vec_env
         self.actions = maker.action_set
 
@@ -269,7 +270,7 @@ class Trainer(object):
                 #     supervised_prob[step][i] = prob  
                      
                  # Obser reward and next obs
-                obs, reward, done, info = envs.step(None)
+                obs, reward, done, info = envs.step([None]*num_processes)
                 reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
                 episode_rewards += reward
 
@@ -289,7 +290,7 @@ class Trainer(object):
 
                 update_current_obs(current_obs, obs, envs, self.num_stack)
 
-                rollouts.insert(current_obs, states, actions, action_log_prob, value, reward, masks)
+                rollouts.insert(current_obs, states, critic_actions, action_log_prob, value, reward, masks)
           
             with torch.no_grad():
                 next_value = actor_critic.get_value(rollouts.observations[-1],
@@ -306,7 +307,7 @@ class Trainer(object):
                 end = time.time()
                 total_num_steps = (j + 1) * num_processes * self.num_steps
             
-                kv = OrderedMapping([("repeat", s),
+                kv = OrderedMapping([("updates", j),
                                     ("action loss", action_loss),
                                     ("dt", (end - start))])
 

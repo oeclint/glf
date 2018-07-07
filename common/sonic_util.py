@@ -431,7 +431,7 @@ class ReversePlay(gym.Wrapper):
 
         return obs, rew, done, info
 
-class EnvMaker(obj):
+class EnvMaker(object):
     def __init__(self, game_state, num_processes, actions=None, human_actions=None, scenario=None, 
             log_dir='log', record_dir='bk2s', record_interval=10, order_actions=True):
 
@@ -445,10 +445,6 @@ class EnvMaker(obj):
                 processes.append(game_state[i])
 
         self.processes = tuple(processes)
-        self.is_supervised = is_supervised
-
-        if not is_supervised:
-            action_set = actions
 
         seed = 1
 
@@ -462,7 +458,7 @@ class EnvMaker(obj):
 
             if order_actions:
                 # order key actions, helps with debugging
-
+                buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
                 left = [0] * 12
                 left[buttons.index("LEFT")] = 1
                 left = tuple(left)
