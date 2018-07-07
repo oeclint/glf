@@ -15,6 +15,7 @@ from retro import make
 from baselines import bench
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
+from glf.common.containers import OrderedSet
 
 import torch
 
@@ -365,6 +366,7 @@ class HumanPlay(gym.Wrapper):
             action = self.curr_action
         
         obs, rew, done, info = self.env.step(action)
+        info['action'] = action
 
         if not exceeds_human_steps:
             # done if more steps than human
@@ -419,17 +421,132 @@ class ReversePlay(gym.Wrapper):
 
         return obs
 
-    def step(self, action=None):
+    def step(self, action=None, rew_goal = 9000):
         
         obs, rew, done, info = self.env.step(action)
 
-        if sum(self.env.rews) >= 9000:
+        if sum(self.env.rews) >= rew_goal:
             # only step backward when beats level
             self.step_backward+=1
 
         return obs, rew, done, info
 
-def make_env(game, state, seed, rank, log_dir=None, scenario=None, actions=None, record_dir=None, record_interval=10000):
+class EnvMaker(obj):
+    def __init__(self, game_state, num_processes, actions=None, human_actions=None, scenario=None, 
+            log_dir='log', record_dir='bk2s', record_interval=10, order_actions=True):
+
+        chunks = [num_processes//len(game_state)]*len(game_state)
+        chunks[-1]+=num_processes-sum(chunks)
+
+        processes = []
+
+        for i, size in enumerate(chunks):
+            for j in range(size):
+                processes.append(game_state[i])
+
+        self.processes = tuple(processes)
+        self.is_supervised = is_supervised
+
+        if not is_supervised:
+            action_set = actions
+
+        seed = 1
+
+        if human_actions is not None:
+            # supervised actions per process
+            all_actions = []
+            for arr in human_actions:
+                all_actions+=arr
+
+            action_set = [np.array(a, 'int') for a in set(map(tuple, all_actions))]
+
+            if order_actions:
+                # order key actions, helps with debugging
+
+                left = [0] * 12
+                left[buttons.index("LEFT")] = 1
+                left = tuple(left)
+                right = [0] * 12
+                right[buttons.index("RIGHT")] = 1
+                right = tuple(right)
+                jump = [0] * 12
+                jump[buttons.index("B")] = 1
+                jump = tuple(jump)
+
+                core_actions = tuple([left, right, jump])
+                actions_tup = tuple(map(tuple, action_set))
+
+                for core_action in core_actions:
+                    if core_action not in actions_tup:
+                        raise ValueError("core actions missing in action set")
+
+                sort_index = []
+
+                for act in actions_tup:
+                    if act in core_actions:
+                        sort_index.append(core_actions.index(act))
+                    else:
+                        sort_index.append(len(sort_index)+len(core_actions))
+
+                action_set = [np.array(a) for _,a in sorted(zip(sort_index,actions_tup))]
+
+            envs = [_make_env(processes[i][0], processes[i][1], seed, i, 
+                        log_dir, scenario, action_set, human_actions[i], record_dir, record_interval)
+                            for i in range(num_processes)]
+
+        elif actions is not None:
+            # unsupervised
+            action_set = [np.array(a, 'int') for a in OrderedSet(map(tuple, actions))]
+
+            envs = [_make_env(processes[i][0], processes[i][1], seed, i, 
+                        log_dir, scenario, action_set, None, record_dir, record_interval)
+                            for i in range(num_processes)]
+
+
+        else:
+            action_set = None
+            envs = [_make_env(processes[i][0], processes[i][1], seed, i, 
+                        log_dir, scenario, action_set, None, record_dir, record_interval)
+                            for i in range(num_processes)]
+
+        self.action_set = action_set
+        self.vec_env = make_vec_env(envs)
+
+    @classmethod
+    def from_human_play(cls, game_state, play_path, scenario='contest', log_dir='log_human', 
+            record_dir='supervised_bk2s', record_interval=10):
+
+        buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
+        actions_map = {}
+
+        for game, state in set(game_state):
+
+            path = os.path.join(play_path,game,scenario)
+
+            fi = os.path.join(path,'{}-{}.json'.format(game,state))
+
+            with open(fi) as f:
+                actions_map[(game,state)] = json.load(f)
+
+            for ep in actions_map[(game,state)]:
+
+                arr = SonicActions.from_sonic_config(actions_map[(game,state)][ep])
+                actions_map[(game,state)][ep] = arr.data.tolist()
+
+        sonic_actions = []
+        processes = []
+
+        for k in actions_map:
+            for ep in actions_map[k]:
+                sonic_actions.append(actions_map[k][ep])
+                processes.append(k)
+
+        num_processes = len(processes)
+        return cls(processes, num_processes, None, sonic_actions, scenario, log_dir, record_dir, record_interval)
+
+
+def _make_env(game, state, seed, rank, log_dir=None, scenario=None, action_set=None, 
+        actions=None,record_dir=None, record_interval=10000):
 
     def _thunk():
 
@@ -452,18 +569,18 @@ def make_env(game, state, seed, rank, log_dir=None, scenario=None, actions=None,
 
         env = SonicObsWrapper(env)
         env = AllowBacktracking(env)
-        env = SonicActDiscretizer(env, actions)
+        env = SonicActDiscretizer(env, action_set)
+        if actions is not None:
+            env = HumanPlay(env, actions)
+            env = ReversePlay(env, 500)
 
         return env
 
     return _thunk
 
-def make_envs(game_state, seed = 1, log_dir=None, scenario = None, actions=None, record_dir=None, record_interval=10000):
+def make_vec_env(envs):
 
-    num_processes = len(game_state)
-
-    envs = [make_env(game_state[i][0], game_state[i][1], seed, i, log_dir, scenario, actions, record_dir, record_interval)
-            for i in range(num_processes)]
+    num_processes = len(envs)
 
     if num_processes > 1:
         envs = SubprocVecEnv(envs)

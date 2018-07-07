@@ -2,7 +2,7 @@
 import torch
 import numpy as np
 
-from glf.common.sonic_util import make_envs, SonicActionsVec, update_current_obs, actions_from_human_data
+from glf.common.sonic_util import update_current_obs, EnvMaker
 from glf.common.containers import OrderedMapping
 from glf.acktr.a2c_acktr import A2C_ACKTR
 from glf.acktr.model import Policy
@@ -103,16 +103,10 @@ class Trainer(object):
    
     def train(self,game_state,lr=1e-4,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10,record_dir='bk2s',record_interval=100):
 
-        chunks = [num_processes//len(game_state)]*len(game_state)
-        chunks[-1]+=num_processes-sum(chunks)
+        maker = EnvMaker(game_state=game_state, num_processes=num_processes, log_dir=log_dir,actions=self.actions,
+            record_dir=record_dir, record_interval=record_interval)
 
-        processes = []
-
-        for i, size in enumerate(chunks):
-            for j in range(size):
-                processes.append(game_state[i])
-
-        envs = make_envs(processes,log_dir=log_dir,actions=self.actions,record_dir=record_dir, record_interval=record_interval)
+        envs = maker.vec_env
 
         obs_shape = envs.observation_space.shape
         obs_shape = (obs_shape[0] * self.num_stack, *obs_shape[1:])
@@ -209,22 +203,14 @@ class Trainer(object):
 
                 csvwriter.writekvs(kv)
 
-    def train_from_human(self,game_state,lr=1e-6,num_repeat=30,log_dir='log_human',
+    def train_from_human(self,game_state,lr=1e-3,num_frames=10e6,log_dir='log_human',log_interval=10,
         play_path='human',scenario='contest',p_correct=0.95):
 
-        unique_actions, game_state_actions = actions_from_human_data(game_state, scenario, play_path)
-        self.actions = unique_actions
+        maker = EnvMaker.from_human_play(game_state=game_state, play_path=play_path, scenario=scenario, log_dir=log_dir)
+        envs = maker.vec_env
+        self.actions = maker.action_set
 
-        sonic_actions = []
-        processes = []
-
-        for k in game_state_actions:
-            for ep in game_state_actions[k]:
-                sonic_actions.append(game_state_actions[k][ep])
-                processes.append(k)
- 
-        num_processes = len(processes)
-        envs = make_envs(processes, log_dir=log_dir, scenario=scenario, actions=self.actions)
+        num_processes = envs.num_envs
 
         obs_shape = envs.observation_space.shape
         obs_shape = (obs_shape[0] * self.num_stack, *obs_shape[1:])
@@ -239,94 +225,87 @@ class Trainer(object):
         if self.gmat is not None:
             actor_critic.base.set_batches(processes)
 
-        sonic_actions = SonicActionsVec(sonic_actions)
-        sonic_actions = sonic_actions.discretize(self.actions)
+        csvwriter = CSVOutputFormat('supervised_loss.csv')
 
-        csvwriter = CSVOutputFormat('loss.csv')
+        rollouts = RolloutStorage(self.num_steps, num_processes, obs_shape, envs.action_space, actor_critic.state_size)
+        current_obs = torch.zeros(num_processes, *obs_shape)
 
-        for s in range(num_repeat):
+        obs = envs.reset()
+        update_current_obs(current_obs, obs, envs, self.num_stack)
+        rollouts.observations[0].copy_(current_obs)
 
-            rollouts = RolloutStorage(self.num_steps, num_processes, obs_shape, envs.action_space, actor_critic.state_size)
-            current_obs = torch.zeros(num_processes, *obs_shape)
+        supervised_prob = torch.zeros(self.num_steps, num_processes, 1)
+        # These variables are used to compute average rewards for all processes.
+        episode_rewards = torch.zeros([num_processes, 1])
+        final_rewards = torch.zeros([num_processes, 1])
 
-            obs = envs.reset()
-            update_current_obs(current_obs, obs, envs, self.num_stack)
-            rollouts.observations[0].copy_(current_obs)
+        if self.cuda:
+            current_obs = current_obs.cuda()
+            supervised_prob = supervised_prob.cuda()
+            rollouts.cuda()
 
-            supervised_prob = torch.zeros(self.num_steps, num_processes, 1)
-            # These variables are used to compute average rewards for all processes.
-            episode_rewards = torch.zeros([num_processes, 1])
-            final_rewards = torch.zeros([num_processes, 1])
+        num_updates = int(num_frames) // self.num_steps // num_processes
 
-            if self.cuda:
-                current_obs = current_obs.cuda()
-                supervised_prob = supervised_prob.cuda()
-                rollouts.cuda()
+        start = time.time()
+        for j in range(num_updates):
+            for step in range(self.num_steps):
 
-            start = time.time()
-
-            for action_group in sonic_actions.stack_by(self.num_steps):
-                for step, actions in enumerate(action_group):
-
-                    actions = torch.tensor(actions)
-                    if self.cuda:
-                        actions = actions.cuda()
-
-                    with torch.no_grad():
-                        value, critic_actions, action_log_prob, states = actor_critic.act(
-                                rollouts.observations[step],
-                                rollouts.states[step],
-                                rollouts.masks[step])
-                   
-                    #supervised log prob calculation
-                    n_actions = len(self.actions)
-                    for i,(act, true_act) in enumerate(zip(critic_actions,actions)):
-                        if int(act) == int(true_act):
-                            # probability it is correct
-                            prob = p_correct
-                        else:
-                            # assume all wrong choices are uniformily distributed
-                            prob = (1 - p_correct)/(n_actions-1)
-
-                        supervised_prob[step][i] = prob  
-
-                    cpu_actions = actions.squeeze(1).cpu().numpy()                      
-                     # Obser reward and next obs
-                    obs, reward, done, info = envs.step(cpu_actions)
-                    reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
-                    episode_rewards += reward
-
-                    # If done then clean the history of observations.
-                    masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in done])
-                    final_rewards *= masks
-                    final_rewards += (1 - masks) * episode_rewards
-                    episode_rewards *= masks
-
-                    if self.cuda:
-                        masks = masks.cuda()
-
-                    if current_obs.dim() == 4:
-                        current_obs *= masks.unsqueeze(2).unsqueeze(2)
-                    else:
-                        current_obs *= masks
-
-                    update_current_obs(current_obs, obs, envs, self.num_stack)
-
-                    rollouts.insert(current_obs, states, actions, action_log_prob, value, reward, masks)
-              
                 with torch.no_grad():
-                    next_value = actor_critic.get_value(rollouts.observations[-1],
-                                                        rollouts.states[-1],
-                                                        rollouts.masks[-1]).detach()
+                    value, critic_actions, action_log_prob, states = actor_critic.act(
+                            rollouts.observations[step],
+                            rollouts.states[step],
+                            rollouts.masks[step])
+               
+                #supervised log prob calculation
+                # n_actions = len(self.actions)
+                # for i,(act, true_act) in enumerate(zip(critic_actions,actions)):
+                #     if int(act) == int(true_act):
+                #         # probability it is correct
+                #         prob = p_correct
+                #     else:
+                #         # assume all wrong choices are uniformily distributed
+                #         prob = (1 - p_correct)/(n_actions-1)
 
-                rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
+                #     supervised_prob[step][i] = prob  
+                     
+                 # Obser reward and next obs
+                obs, reward, done, info = envs.step(None)
+                reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
+                episode_rewards += reward
 
-                value_loss, action_loss, dist_entropy = self.agent.update(rollouts, supervised_prob)
+                # If done then clean the history of observations.
+                masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in done])
+                final_rewards *= masks
+                final_rewards += (1 - masks) * episode_rewards
+                episode_rewards *= masks
 
-                rollouts.after_update()
+                if self.cuda:
+                    masks = masks.cuda()
 
+                if current_obs.dim() == 4:
+                    current_obs *= masks.unsqueeze(2).unsqueeze(2)
+                else:
+                    current_obs *= masks
+
+                update_current_obs(current_obs, obs, envs, self.num_stack)
+
+                rollouts.insert(current_obs, states, actions, action_log_prob, value, reward, masks)
+          
+            with torch.no_grad():
+                next_value = actor_critic.get_value(rollouts.observations[-1],
+                                                    rollouts.states[-1],
+                                                    rollouts.masks[-1]).detach()
+
+            rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
+
+            value_loss, action_loss, dist_entropy = self.agent.update(rollouts, supervised_prob)
+
+            rollouts.after_update()
+            
+            if j % log_interval == 0:
                 end = time.time()
-                
+                total_num_steps = (j + 1) * num_processes * self.num_steps
+            
                 kv = OrderedMapping([("repeat", s),
                                     ("action loss", action_loss),
                                     ("dt", (end - start))])
