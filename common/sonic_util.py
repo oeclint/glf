@@ -308,6 +308,127 @@ class EnvRecorder(gym.Wrapper):
         obs, rew, done, info = self.env.step(action)
         return obs, rew, done, info
 
+class HumanPlay(gym.Wrapper):
+    """
+    Record gym environment every n episodes
+    """
+    def __init__(self, env, actions):
+
+        super(HumanPlay, self).__init__(env)
+
+        self.human_actions = []
+
+        action_indexer = {}
+
+        for i, a in enumerate(env._actions):
+            action_indexer[tuple(a)] = i
+
+        for a in actions:
+            val = action_indexer[tuple(a)]
+            self.human_actions.append(val)
+
+        self.human_step = 0
+        self.rews = []
+
+    @property
+    def curr_action(self):
+        if self.human_step < len(self.human_actions):
+            return self.human_actions[self.human_step]
+        else:
+            return None
+
+    @property
+    def prev_action(self):
+        if self.human_step-1>=0:
+            return self.human_actions[self.human_step-1]
+        else:
+            return None
+
+    @property
+    def next_action(self):
+        if self.human_step + 1 < len(self.human_actions):
+            return self.human_actions[self.human_step + 1]
+        else:
+            return None
+
+    def reset(self, **kwargs):
+
+        obs = self.env.reset(**kwargs)
+        self.human_step = 0
+        self.rews = []
+
+        return obs
+
+    def step(self, action=None, exceeds_human_steps = False):
+
+        if action is None:
+            action = self.curr_action
+        
+        obs, rew, done, info = self.env.step(action)
+
+        if not exceeds_human_steps:
+            # done if more steps than human
+            if self.next_action is None:
+                done = True
+
+        self.human_step += 1
+        self.rews.append(rew)
+
+        return obs, rew, done, info
+
+    def fast_forward(self, steps):
+        for i in range(steps):
+            obs, rew, done, info = self.step()
+
+
+class ReversePlay(gym.Wrapper):
+    """
+    Record gym environment every n episodes
+    """
+    def __init__(self, env, interval):
+
+        super(ReversePlay, self).__init__(env)
+        self._states = []
+
+        self.step_backward = 1
+
+        done = False
+        i = 0
+        self._chk_point = []
+
+        self.env.reset()
+
+        while not done:
+            if i % interval == 0:
+                    self._chk_point.append(i)
+
+            obs, rew, done, info = self.env.step()
+                    
+            i += 1
+
+    def reset(self, **kwargs):
+
+        obs = self.env.reset(**kwargs)
+        
+        if self.step_backward <= len(self._chk_point):
+            step = self._chk_point[-1*self.step_backward]
+        else:
+            step = self._chk_point[0]
+
+        self.env.fast_forward(step)
+
+        return obs
+
+    def step(self, action=None):
+        
+        obs, rew, done, info = self.env.step(action)
+
+        if sum(self.env.rews) >= 9000:
+            # only step backward when beats level
+            self.step_backward+=1
+
+        return obs, rew, done, info
+
 def make_env(game, state, seed, rank, log_dir=None, scenario=None, actions=None, record_dir=None, record_interval=10000):
 
     def _thunk():
@@ -361,3 +482,22 @@ def update_current_obs(current_obs,obs,envs,num_stack):
     if num_stack > 1:
         current_obs[:, :-shape_dim0] = current_obs[:, shape_dim0:]
     current_obs[:, -shape_dim0:] = obs
+
+if __name__ == "__main__":
+
+    game = 'SonicTheHedgehog-Genesis'
+    state = 'SpringYardZone.Act2'
+
+    unique_actions, game_state_actions = actions_from_human_data([('SonicTheHedgehog-Genesis','SpringYardZone.Act2'),
+        ('SonicTheHedgehog-Genesis','SpringYardZone.Act3')], 'contest', '../../glf/play/human')
+
+    env = make(game=game, state=state, scenario = 'contest')
+    env = SonicActDiscretizer(env,unique_actions)
+    env = HumanPlay(env, game_state_actions[(game,state)]['2'])
+    env = ReversePlay(env, 500)
+    env.reset()
+    while True:
+        _obs, _rew, done, _info = env.step()
+        env.render()
+        if done:
+            env.reset()
