@@ -390,7 +390,6 @@ class ReversePlay(gym.Wrapper):
     def __init__(self, env, interval):
 
         super(ReversePlay, self).__init__(env)
-        self._states = []
 
         self.step_backward = 1
 
@@ -600,9 +599,6 @@ def update_current_obs(current_obs,obs,envs,num_stack):
 
 if __name__ == "__main__":
 
-    game = 'SonicTheHedgehog-Genesis'
-    state = 'GreenHillZone.Act1'
-
     maker = EnvMaker.from_human_play(game_state=[('SonicTheHedgehog-Genesis','GreenHillZone.Act1'),
          ('SonicTheHedgehog-Genesis','GreenHillZone.Act3')], play_path='../../glf/play/human', scenario='contest', log_dir=None,
         record_dir=None,record_interval=None)
@@ -610,5 +606,5 @@ if __name__ == "__main__":
 
     envs.reset()
     while True:
-        _obs, _rew, done, _info = envs.step([None]*envs.num_envs)
+        _obs, _rew, done, _info = envs.step(np.random.randint(0,10,envs.num_envs))
         envs.render()
