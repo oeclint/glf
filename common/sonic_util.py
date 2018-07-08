@@ -601,18 +601,14 @@ def update_current_obs(current_obs,obs,envs,num_stack):
 if __name__ == "__main__":
 
     game = 'SonicTheHedgehog-Genesis'
-    state = 'SpringYardZone.Act2'
+    state = 'GreenHillZone.Act1'
 
-    unique_actions, game_state_actions = actions_from_human_data([('SonicTheHedgehog-Genesis','SpringYardZone.Act2'),
-        ('SonicTheHedgehog-Genesis','SpringYardZone.Act3')], 'contest', '../../glf/play/human')
+    maker = EnvMaker.from_human_play(game_state=[('SonicTheHedgehog-Genesis','GreenHillZone.Act1'),
+         ('SonicTheHedgehog-Genesis','GreenHillZone.Act3')], play_path='../../glf/play/human', scenario='contest', log_dir=None,
+        record_dir=None,record_interval=None)
+    envs = maker.vec_env
 
-    env = make(game=game, state=state, scenario = 'contest')
-    env = SonicActDiscretizer(env,unique_actions)
-    env = HumanPlay(env, game_state_actions[(game,state)]['2'])
-    env = ReversePlay(env, 500)
-    env.reset()
+    envs.reset()
     while True:
-        _obs, _rew, done, _info = env.step()
-        env.render()
-        if done:
-            env.reset()
+        _obs, _rew, done, _info = envs.step([None]*envs.num_envs)
+        envs.render()
