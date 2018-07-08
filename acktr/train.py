@@ -260,7 +260,10 @@ class Trainer(object):
                  # Obser reward and next obs
                 cpu_actions = critic_actions.squeeze(1).cpu().numpy()
                 obs, reward, done, info = envs.step(cpu_actions)
-                actions = [i['action'] for i in info] 
+                actions = [i['action'] for i in info]
+                print(','.join(['{0: <5}'.format(j)]+['{0: <5}'.format(int(i['x'])) for i in info]))
+                print(','.join(['{0: <5}'.format(j)]+['{0: <5}'.format(i) for i in cpu_actions])) 
+                print(','.join(['{0: <5}'.format(j)]+['{0: <5}'.format(i) for i in actions]))
                 #supervised log prob calculation
                 n_actions = len(self.actions)
                 for i,(act, true_act) in enumerate(zip(critic_actions,actions)):

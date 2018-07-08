@@ -366,7 +366,7 @@ class HumanPlay(gym.Wrapper):
             action = self.curr_action
         
         obs, rew, done, info = self.env.step(action)
-        info['action'] = action
+        info['action'] = self.curr_action
 
         if not exceeds_human_steps:
             # done if more steps than human
