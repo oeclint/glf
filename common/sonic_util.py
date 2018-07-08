@@ -402,22 +402,24 @@ class ReversePlay(gym.Wrapper):
 
         while not done:
             if i % interval == 0:
-                    self._chk_point.append(i)
+                    self._chk_point.append((i, self.env.unwrapped.em.get_state()))
 
             obs, rew, done, info = self.env.step()
                     
             i += 1
 
     def reset(self, **kwargs):
-
-        obs = self.env.reset(**kwargs)
         
         if self.step_backward <= len(self._chk_point):
-            step = self._chk_point[-1*self.step_backward]
+            step, state = self._chk_point[-1*self.step_backward]
         else:
-            step = self._chk_point[0]
+            step, state = self._chk_point[0]
 
-        self.env.fast_forward(step)
+        obs = self.env.reset(**kwargs)
+
+        self.env.unwrapped.em.set_state(state)
+
+        self.env.human_step = step
 
         return obs
 
