@@ -79,7 +79,7 @@ class Policy(nn.Module):
         value, _, _ = self.base(inputs, states, masks)
         return value
 
-    def evaluate_actions(self, inputs, states, masks, action, update_step = 50):
+    def evaluate_actions(self, inputs, states, masks, action, update_step = 1):
         value, actor_features, states = self.base(inputs, states, masks)
         dist = self.dist(actor_features)
 

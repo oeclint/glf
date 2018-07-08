@@ -204,7 +204,7 @@ class Trainer(object):
                 csvwriter.writekvs(kv)
 
     def train_from_human(self,game_state,lr=1e-3,num_frames=10e6,log_dir='log_human',log_interval=10,
-        record_dir='bk2s',record_interval=1,play_path='human',scenario='contest',p_correct=0.95):
+        record_dir='supervised_bk2s',record_interval=1,play_path='human',scenario='contest',p_correct=0.95):
 
         maker = EnvMaker.from_human_play(game_state=game_state, play_path=play_path, scenario=scenario, log_dir=log_dir,
             record_dir=record_dir,record_interval=record_interval)
@@ -256,21 +256,24 @@ class Trainer(object):
                             rollouts.observations[step],
                             rollouts.states[step],
                             rollouts.masks[step])
-               
-                #supervised log prob calculation
-                # n_actions = len(self.actions)
-                # for i,(act, true_act) in enumerate(zip(critic_actions,actions)):
-                #     if int(act) == int(true_act):
-                #         # probability it is correct
-                #         prob = p_correct
-                #     else:
-                #         # assume all wrong choices are uniformily distributed
-                #         prob = (1 - p_correct)/(n_actions-1)
 
-                #     supervised_prob[step][i] = prob  
-                     
                  # Obser reward and next obs
-                obs, reward, done, info = envs.step([None]*num_processes)
+                cpu_actions = critic_actions.squeeze(1).cpu().numpy()
+                obs, reward, done, info = envs.step(cpu_actions)
+                actions = [i['action'] for i in info] 
+                #supervised log prob calculation
+                print(j,info[0]['x'])
+                n_actions = len(self.actions)
+                for i,(act, true_act) in enumerate(zip(critic_actions,actions)):
+                    if int(act) == int(true_act):
+                        # probability it is correct
+                        prob = p_correct
+                    else:
+                        # assume all wrong choices are uniformily distributed
+                        prob = (1 - p_correct)/(n_actions-1)
+
+                    supervised_prob[step][i] = prob
+  
                 reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
                 episode_rewards += reward
 
