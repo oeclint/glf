@@ -204,7 +204,7 @@ class Trainer(object):
                 csvwriter.writekvs(kv)
 
     def train_from_human(self,game_state,lr=1e-3,num_frames=10e6,log_dir='log_human',log_interval=10,
-        record_dir='supervised_bk2s',record_interval=1,play_path='human',scenario='contest',p_correct=0.95):
+        record_dir='supervised_bk2s',record_interval=10,play_path='human',scenario='contest',p_correct=0.95):
 
         maker = EnvMaker.from_human_play(game_state=game_state, play_path=play_path, scenario=scenario, log_dir=log_dir,
             record_dir=record_dir,record_interval=record_interval)
@@ -262,7 +262,6 @@ class Trainer(object):
                 obs, reward, done, info = envs.step(cpu_actions)
                 actions = [i['action'] for i in info] 
                 #supervised log prob calculation
-                print(j,info[0]['x'])
                 n_actions = len(self.actions)
                 for i,(act, true_act) in enumerate(zip(critic_actions,actions)):
                     if int(act) == int(true_act):
