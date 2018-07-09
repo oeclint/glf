@@ -360,7 +360,7 @@ class HumanPlay(gym.Wrapper):
 
         return obs
 
-    def step(self, action=None, exceeds_human_steps = False):
+    def step(self, action=None, exceeds_human_steps = True):
 
         if action is None:
             action = self.curr_action
@@ -393,19 +393,21 @@ class ReversePlay(gym.Wrapper):
 
         self.step_backward = 1
 
-        done = False
-        i = 0
         self._chk_point = []
 
         self.env.reset()
 
+        done = False
+        i = 0
+
         while not done:
+
             if i % interval == 0:
-                    self._chk_point.append((i, self.env.unwrapped.em.get_state()))
+                self._chk_point.append((i , self.env.unwrapped.em.get_state()))
 
             obs, rew, done, info = self.env.step()
-                    
-            i += 1
+
+            i+=1
 
     def reset(self, **kwargs):
         
@@ -413,6 +415,8 @@ class ReversePlay(gym.Wrapper):
             step, state = self._chk_point[-1*self.step_backward]
         else:
             step, state = self._chk_point[0]
+
+        self.env.unwrapped.initial_state = state
 
         obs = self.env.reset(**kwargs)
 
@@ -422,11 +426,11 @@ class ReversePlay(gym.Wrapper):
 
         return obs
 
-    def step(self, action=None, rew_goal = 9000):
+    def step(self, action=None):
         
         obs, rew, done, info = self.env.step(action)
 
-        if sum(self.env.rews) >= rew_goal:
+        if info['screen_x'] == info['screen_x_end']:
             # only step backward when beats level
             self.step_backward+=1
 
@@ -601,10 +605,10 @@ if __name__ == "__main__":
 
     maker = EnvMaker.from_human_play(game_state=[('SonicTheHedgehog-Genesis','GreenHillZone.Act1'),
          ('SonicTheHedgehog-Genesis','GreenHillZone.Act3')], play_path='../../glf/play/human', scenario='contest', log_dir=None,
-        record_dir=None,record_interval=None)
+        record_dir='../../test_bk2s',record_interval=1)
     envs = maker.vec_env
 
     envs.reset()
     while True:
-        _obs, _rew, done, _info = envs.step(np.random.randint(0,10,envs.num_envs))
+        _obs, _rew, done, _info = envs.step([None]*envs.num_envs)
         envs.render()
