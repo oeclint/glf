@@ -360,7 +360,7 @@ class HumanPlay(gym.Wrapper):
 
         return obs
 
-    def step(self, action=None, exceeds_human_steps = True):
+    def step(self, action=None, exceeds_human_steps = False):
 
         if action is None:
             action = self.curr_action
