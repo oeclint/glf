@@ -245,6 +245,7 @@ class Trainer(object):
             supervised_prob = supervised_prob.cuda()
             rollouts.cuda()
 
+        total_num_steps = 0
         num_updates = int(num_frames) // self.num_steps // num_processes
 
         start = time.time()
@@ -258,20 +259,30 @@ class Trainer(object):
                             rollouts.masks[step])
 
                  # Obser reward and next obs
-                cpu_actions = critic_actions.squeeze(1).cpu().numpy()
-                obs, reward, done, info = envs.step(cpu_actions)
-                actions = [i['action'] for i in info]
-                #supervised log prob calculation
-                n_actions = len(self.actions)
-                for i,(act, true_act) in enumerate(zip(critic_actions,actions)):
-                    if int(act) == int(true_act):
-                        # probability it is correct
-                        prob = p_correct
-                    else:
-                        # assume all wrong choices are uniformily distributed
-                        prob = (1 - p_correct)/(n_actions-1)
+                if np.random.random()<=np.exp(-1*total_num_steps/50000):
+                    fused = [int(a2) if a1 is None else int(a1) for a1, a2 in zip(
+                        envs.actions, critic_actions)]
 
-                    supervised_prob[step][i] = prob
+                    critic_actions = torch.tensor(fused).unsqueeze(1)
+
+                    if self.cuda:
+                        critic_actions = critic_actions.cuda()
+                
+                cpu_actions = critic_actions.squeeze(1).cpu().numpy()
+                #cpu_actions = critic_actions.squeeze(1).cpu().numpy()
+                obs, reward, done, info = envs.step(cpu_actions)
+                #actions = [i['action'] for i in info]
+                #supervised log prob calculation
+                #n_actions = len(self.actions)
+                #for i,(act, true_act) in enumerate(zip(critic_actions,actions)):
+                #    if int(act) == int(true_act):
+                #        # probability it is correct
+                #        prob = p_correct
+                #    else:
+                #        # assume all wrong choices are uniformily distributed
+                #        prob = (1 - p_correct)/(n_actions-1)
+
+                #    supervised_prob[step][i] = prob
   
                 reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
                 episode_rewards += reward
@@ -299,22 +310,29 @@ class Trainer(object):
                                                     rollouts.states[-1],
                                                     rollouts.masks[-1]).detach()
 
-            rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
+            rollouts.compute_returns(next_value, True, self.gamma, self.tau)
 
-            value_loss, action_loss, dist_entropy = self.agent.update(rollouts, supervised_prob)
+            value_loss, action_loss, dist_entropy = self.agent.update(rollouts)
 
             rollouts.after_update()
-            
+            total_num_steps = (j + 1) * num_processes * self.num_steps
+ 
             if j % log_interval == 0:
                 end = time.time()
-                total_num_steps = (j + 1) * num_processes * self.num_steps
-            
+               # total_num_steps = (j + 1) * num_processes * self.num_steps
+
                 kv = OrderedMapping([("updates", j),
-                                    ("action loss", action_loss),
-                                    ("dt", (end - start))])
+                                  ("num timesteps", total_num_steps),
+                                  ("FPS", int(total_num_steps / (end - start))),
+                                  ("mean reward", final_rewards.mean().item()),
+                                  ("median reward", final_rewards.median().item()),
+                                  ("min reward", final_rewards.min().item()),
+                                  ("max reward", final_rewards.max().item()),
+                                  ("value loss", value_loss * self.agent.value_loss_coef),
+                                  ("action loss", action_loss),
+                                  ("dist entropy", dist_entropy * self.agent.entropy_coef)])
 
                 csvwriter.writekvs(kv)
-
 
 if __name__ == '__main__':
     t = Trainer()

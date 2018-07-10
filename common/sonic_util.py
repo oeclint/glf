@@ -360,13 +360,12 @@ class HumanPlay(gym.Wrapper):
 
         return obs
 
-    def step(self, action=None, exceeds_human_steps = False):
+    def step(self, action=None, exceeds_human_steps = True):
 
         if action is None:
             action = self.curr_action
         
         obs, rew, done, info = self.env.step(action)
-        info['action'] = self.curr_action
 
         if not exceeds_human_steps:
             # done if more steps than human
@@ -429,12 +428,16 @@ class ReversePlay(gym.Wrapper):
     def step(self, action=None):
         
         obs, rew, done, info = self.env.step(action)
-
+        #TODO find better criteria, does not always determine if finished level
         if info['screen_x'] == info['screen_x_end']:
             # only step backward when beats level
             self.step_backward+=1
 
         return obs, rew, done, info
+
+    @property
+    def curr_action(self):
+        return self.env.curr_action
 
 class EnvMaker(object):
     def __init__(self, game_state, num_processes, actions=None, human_actions=None, scenario=None, 
@@ -547,7 +550,7 @@ class EnvMaker(object):
 
 
 def _make_env(game, state, seed, rank, log_dir=None, scenario=None, action_set=None, 
-        actions=None,record_dir=None, record_interval=10000):
+        actions=None,record_dir=None, record_interval=10):
 
     def _thunk():
 
@@ -573,18 +576,64 @@ def _make_env(game, state, seed, rank, log_dir=None, scenario=None, action_set=N
         env = SonicActDiscretizer(env, action_set)
         if actions is not None:
             env = HumanPlay(env, actions)
-            env = ReversePlay(env, 500)
+#            env = ReversePlay(env, 500)
 
         return env
 
     return _thunk
+
+from baselines.common.vec_env import VecEnvWrapper
+class HumanActionVecEnv(VecEnvWrapper):
+    def __init__(self, env_fns, spaces=None):
+        import baselines.common.vec_env.subproc_vec_env as VecEnv
+        def worker(remote, parent_remote, env_fn_wrapper):
+            parent_remote.close()
+            env = env_fn_wrapper.x()
+            while True:
+                cmd, data = remote.recv()
+                if cmd == 'step':
+                    ob, reward, done, info = env.step(data)
+                    if done:
+                        ob = env.reset()
+                    remote.send((ob, reward, done, info))
+                elif cmd == 'reset':
+                    ob = env.reset()
+                    remote.send(ob)
+                elif cmd == 'render':
+                    remote.send(env.render(mode='rgb_array'))
+                elif cmd == 'close':
+                    remote.close()
+                    break
+                elif cmd == 'get_spaces':
+                    remote.send((env.observation_space, env.action_space))
+                elif cmd == 'get_actions':
+                    remote.send(env.curr_action)
+                else:
+                    raise NotImplementedError
+        VecEnv.worker = worker
+        venv = VecEnv.SubprocVecEnv(env_fns, spaces)
+        VecEnvWrapper.__init__(self, venv)
+
+    def reset(self):
+        obs = self.venv.reset()
+        return obs
+
+    def step_wait(self):
+        obs, rews, dones, infos = self.venv.step_wait()
+        return obs, rews, dones, infos
+
+    @property
+    def actions(self):
+        for remote in self.venv.remotes:
+            remote.send(('get_actions', None))
+        return np.stack([remote.recv() for remote in self.venv.remotes])
 
 def make_vec_env(envs):
 
     num_processes = len(envs)
 
     if num_processes > 1:
-        envs = SubprocVecEnv(envs)
+        envs = HumanActionVecEnv(envs)
     else:
         envs = DummyVecEnv(envs)
 
