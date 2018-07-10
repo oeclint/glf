@@ -13,6 +13,7 @@ from collections.abc import Sequence
 from retro_contest.local import make as contest_make
 from retro import make
 from baselines import bench
+from baselines.common.vec_env import VecEnvWrapper
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from glf.common.containers import OrderedSet
@@ -329,7 +330,6 @@ class HumanPlay(gym.Wrapper):
             self.human_actions.append(val)
 
         self.human_step = 0
-        self.rews = []
 
     @property
     def curr_action(self):
@@ -356,7 +356,6 @@ class HumanPlay(gym.Wrapper):
 
         obs = self.env.reset(**kwargs)
         self.human_step = 0
-        self.rews = []
 
         return obs
 
@@ -373,7 +372,6 @@ class HumanPlay(gym.Wrapper):
                 done = True
 
         self.human_step += 1
-        self.rews.append(rew)
 
         return obs, rew, done, info
 
@@ -399,10 +397,14 @@ class ReversePlay(gym.Wrapper):
         done = False
         i = 0
 
+        rew = 0
+        self.rews = [rew]
+        self.rew_target = 9000
+
         while not done:
 
             if i % interval == 0:
-                self._chk_point.append((i , self.env.unwrapped.em.get_state()))
+                self._chk_point.append((i , rew, self.env.unwrapped.em.get_state()))
 
             obs, rew, done, info = self.env.step()
 
@@ -411,9 +413,11 @@ class ReversePlay(gym.Wrapper):
     def reset(self, **kwargs):
         
         if self.step_backward <= len(self._chk_point):
-            step, state = self._chk_point[-1*self.step_backward]
+            step, rew, state = self._chk_point[-1*self.step_backward]
         else:
-            step, state = self._chk_point[0]
+            step, rew, state = self._chk_point[0]
+
+        self.rews = [rew]
 
         self.env.unwrapped.initial_state = state
 
@@ -428,8 +432,11 @@ class ReversePlay(gym.Wrapper):
     def step(self, action=None):
         
         obs, rew, done, info = self.env.step(action)
-        #TODO find better criteria, does not always determine if finished level
-        if info['screen_x'] == info['screen_x_end']:
+        # reward approx but exact when back all the way to start
+        rew = rew * (self.rew_target - self.rews[0])/(self.rew_target)
+        self.rews.append(rew)
+
+        if sum(self.rews) >= self.rew_target:
             # only step backward when beats level
             self.step_backward+=1
 
@@ -582,7 +589,6 @@ def _make_env(game, state, seed, rank, log_dir=None, scenario=None, action_set=N
 
     return _thunk
 
-from baselines.common.vec_env import VecEnvWrapper
 class HumanActionVecEnv(VecEnvWrapper):
     def __init__(self, env_fns, spaces=None):
         import baselines.common.vec_env.subproc_vec_env as VecEnv
