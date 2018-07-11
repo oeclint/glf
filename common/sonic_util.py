@@ -458,6 +458,10 @@ class ReversePlay(gym.Wrapper):
 
         return obs, rew, done, info
 
+    @property
+    def curr_action(self):
+        return self.env.curr_action
+
 class EnvMaker(object):
     def __init__(self, game_state, num_processes, actions=None, human_actions=None, scenario=None, 
             log_dir='log', record_dir='bk2s', record_interval=10, order_actions=True):
