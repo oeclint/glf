@@ -330,6 +330,7 @@ class HumanPlay(gym.Wrapper):
             self.human_actions.append(val)
 
         self.human_step = 0
+        self.rews = [] 
 
     @property
     def curr_action(self):
@@ -356,6 +357,7 @@ class HumanPlay(gym.Wrapper):
 
         obs = self.env.reset(**kwargs)
         self.human_step = 0
+        self.rews = []
 
         return obs
 
@@ -372,6 +374,7 @@ class HumanPlay(gym.Wrapper):
                 done = True
 
         self.human_step += 1
+        self.rews.append(rew)
 
         return obs, rew, done, info
 
@@ -397,18 +400,21 @@ class ReversePlay(gym.Wrapper):
         done = False
         i = 0
 
-        rew = 0
-        self.rews = [rew]
-        self.rew_target = 9000
+        cum_rew = 0
+        self.rews = [cum_rew]
 
         while not done:
 
             if i % interval == 0:
-                self._chk_point.append((i , rew, self.env.unwrapped.em.get_state()))
+                self._chk_point.append((i , cum_rew, self.env.unwrapped.em.get_state()))
 
             obs, rew, done, info = self.env.step()
+            cum_rew = sum(self.env.rews)
 
             i+=1
+
+        self.rew_target = sum(self.env.rews[0:-1]) # reward right before done
+        self.time_bonus = sum(self.env.rews) - self.rew_target
 
     def reset(self, **kwargs):
         
@@ -429,22 +435,28 @@ class ReversePlay(gym.Wrapper):
 
         return obs
 
-    def step(self, action=None):
+    def step(self, action=None, rew_if_done_only=1000):
         
         obs, rew, done, info = self.env.step(action)
         # reward approx but exact when back all the way to start
-        rew = rew * (self.rew_target - self.rews[0])/(self.rew_target)
+        if not done:
+            rew = rew * (self.rew_target - self.rews[0])/(self.rew_target)
+        else:
+            rew = self.time_bonus
+
         self.rews.append(rew)
 
-        if sum(self.rews) >= self.rew_target:
-            # only step backward when beats level
-            self.step_backward+=1
+        if rew_if_done_only is not None:
+            rew = 0
+
+        if done:
+            if sum(self.rews) >= self.rew_target:
+                # only step backward when beats level
+                self.step_backward+=1
+                if rew_if_done_only is not None:
+                    rew = rew_if_done_only
 
         return obs, rew, done, info
-
-    @property
-    def curr_action(self):
-        return self.env.curr_action
 
 class EnvMaker(object):
     def __init__(self, game_state, num_processes, actions=None, human_actions=None, scenario=None, 
@@ -583,7 +595,7 @@ def _make_env(game, state, seed, rank, log_dir=None, scenario=None, action_set=N
         env = SonicActDiscretizer(env, action_set)
         if actions is not None:
             env = HumanPlay(env, actions)
-#            env = ReversePlay(env, 500)
+            env = ReversePlay(env, 500)
 
         return env
 
