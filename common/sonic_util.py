@@ -435,7 +435,7 @@ class ReversePlay(gym.Wrapper):
 
         return obs
 
-    def step(self, action=None, rew_if_done_only=1000):
+    def step(self, action=None, rew_if_done_only=True):
         
         obs, rew, done, info = self.env.step(action)
         # reward approx but exact when back all the way to start
@@ -446,15 +446,15 @@ class ReversePlay(gym.Wrapper):
 
         self.rews.append(rew)
 
-        if rew_if_done_only is not None:
+        if rew_if_done_only:
             rew = 0
 
         if done:
             if sum(self.rews) >= self.rew_target:
                 # only step backward when beats level
                 self.step_backward+=1
-                if rew_if_done_only is not None:
-                    rew = rew_if_done_only
+                if rew_if_done_only:
+                    rew = sum(self.rews[1:])
 
         return obs, rew, done, info
 
