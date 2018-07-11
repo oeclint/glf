@@ -245,7 +245,6 @@ class Trainer(object):
             supervised_prob = supervised_prob.cuda()
             rollouts.cuda()
 
-        total_num_steps = 0
         num_updates = int(num_frames) // self.num_steps // num_processes
 
         start = time.time()
@@ -259,14 +258,14 @@ class Trainer(object):
                             rollouts.masks[step])
 
                  # Obser reward and next obs
-                if np.random.random()<=np.exp(-1*total_num_steps/50000):
-                    fused = [int(a2) if a1 is None else int(a1) for a1, a2 in zip(
-                        envs.actions, critic_actions)]
+                # if np.random.random()<=np.exp(-1*total_num_steps/50000):
+                #     fused = [int(a2) if a1 is None else int(a1) for a1, a2 in zip(
+                #         envs.actions, critic_actions)]
 
-                    critic_actions = torch.tensor(fused).unsqueeze(1)
+                #     critic_actions = torch.tensor(fused).unsqueeze(1)
 
-                    if self.cuda:
-                        critic_actions = critic_actions.cuda()
+                #     if self.cuda:
+                #         critic_actions = critic_actions.cuda()
                 
                 cpu_actions = critic_actions.squeeze(1).cpu().numpy()
                 #cpu_actions = critic_actions.squeeze(1).cpu().numpy()
@@ -310,16 +309,15 @@ class Trainer(object):
                                                     rollouts.states[-1],
                                                     rollouts.masks[-1]).detach()
 
-            rollouts.compute_returns(next_value, True, self.gamma, self.tau)
+            rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
 
             value_loss, action_loss, dist_entropy = self.agent.update(rollouts)
 
             rollouts.after_update()
-            total_num_steps = (j + 1) * num_processes * self.num_steps
  
             if j % log_interval == 0:
                 end = time.time()
-               # total_num_steps = (j + 1) * num_processes * self.num_steps
+                total_num_steps = (j + 1) * num_processes * self.num_steps
 
                 kv = OrderedMapping([("updates", j),
                                   ("num timesteps", total_num_steps),
