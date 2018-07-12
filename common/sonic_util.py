@@ -314,7 +314,7 @@ class HumanPlay(gym.Wrapper):
     """
     Record gym environment every n episodes
     """
-    def __init__(self, env, actions, p_human = 100):
+    def __init__(self, env, actions, p_human = 0.10):
 
         super(HumanPlay, self).__init__(env)
 
@@ -404,11 +404,13 @@ class ReversePlay(gym.Wrapper):
     """
     Record gym environment every n episodes
     """
-    def __init__(self, env, interval):
+    def __init__(self, env, interval, reward_when_done = True):
 
         super(ReversePlay, self).__init__(env)
 
-        self.step_backward = 1
+        self._reward_when_done = reward_when_done
+
+        self._step_backward = 1
 
         self._chk_point = []
 
@@ -442,8 +444,8 @@ class ReversePlay(gym.Wrapper):
 
     def reset(self, **kwargs):
         
-        if self.step_backward <= len(self._chk_point):
-            step, rew, init_state, state = self._chk_point[-1*self.step_backward]
+        if self._step_backward <= len(self._chk_point):
+            step, rew, init_state, state = self._chk_point[-1*self._step_backward]
         else:
             step, rew, init_state, state = self._chk_point[0]
 
@@ -473,14 +475,19 @@ class ReversePlay(gym.Wrapper):
         if done:
             if sum(self.rews) >= self.rew_target:
                 # only step backward when beats level
-                self.step_backward+=1
+                self._step_backward+=1
+
+        if self._reward_when_done:
+            if done:  
+                rew = sum(self.rews)
+            else:
+                rew = 0
 
         return obs, rew, done, info
 
     @property
     def curr_action(self):
         return self.env.curr_action
-
 
 class EnvMaker(object):
     def __init__(self, game_state, num_processes, actions=None, human_actions=None, scenario=None, 
@@ -697,7 +704,7 @@ if __name__ == "__main__":
 
     maker = EnvMaker.from_human_play(game_state=[('SonicTheHedgehog-Genesis','GreenHillZone.Act1'),
          ('SonicTheHedgehog-Genesis','GreenHillZone.Act3')], play_path='../../glf/play/human', scenario='contest', log_dir=None,
-        record_dir='../../test_bk2s',record_interval=1, max_episodes=2)
+        record_dir='../../test_bk2s',record_interval=1, max_episodes=8)
     envs = maker.vec_env
 
     envs.reset()
