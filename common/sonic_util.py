@@ -314,7 +314,7 @@ class HumanPlay(gym.Wrapper):
     """
     Record gym environment every n episodes
     """
-    def __init__(self, env, actions, p_human = 0.10):
+    def __init__(self, env, actions, p_human = 100):
 
         super(HumanPlay, self).__init__(env)
 
@@ -421,10 +421,15 @@ class ReversePlay(gym.Wrapper):
         cum_rew = 0
         self.rews = [cum_rew]
 
+        init_state = self.env.unwrapped.initial_state
+
         while not done:
 
             if i % interval == 0:
-                self._chk_point.append((i , cum_rew, self.env.unwrapped.em.get_state()))
+                self._chk_point.append((i  , cum_rew, init_state, self.env.unwrapped.em.get_state()))
+
+            if (i+1) % interval == 0:
+                init_state = self.env.unwrapped.em.get_state()
 
             obs, rew, done, info = self.env.step()
             cum_rew = sum(self.env.rews)
@@ -438,13 +443,13 @@ class ReversePlay(gym.Wrapper):
     def reset(self, **kwargs):
         
         if self.step_backward <= len(self._chk_point):
-            step, rew, state = self._chk_point[-1*self.step_backward]
+            step, rew, init_state, state = self._chk_point[-1*self.step_backward]
         else:
-            step, rew, state = self._chk_point[0]
+            step, rew, init_state, state = self._chk_point[0]
 
         self.rews = [rew]
 
-        self.env.unwrapped.initial_state = state
+        self.env.unwrapped.initial_state = init_state
 
         obs = self.env.reset(**kwargs)
 
@@ -692,7 +697,7 @@ if __name__ == "__main__":
 
     maker = EnvMaker.from_human_play(game_state=[('SonicTheHedgehog-Genesis','GreenHillZone.Act1'),
          ('SonicTheHedgehog-Genesis','GreenHillZone.Act3')], play_path='../../glf/play/human', scenario='contest', log_dir=None,
-        record_dir='../../test_bk2s',record_interval=1)
+        record_dir='../../test_bk2s',record_interval=1, max_episodes=2)
     envs = maker.vec_env
 
     envs.reset()
