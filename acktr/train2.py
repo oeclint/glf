@@ -235,20 +235,24 @@ class Trainer(object):
         update_current_obs(current_obs, obs, envs, self.num_stack)
         rollouts.observations[0].copy_(current_obs)
 
-        supervised_prob = torch.zeros(self.num_steps, num_processes, 1)
+        #supervised_prob = torch.zeros(self.num_steps, num_processes, 1)
         # These variables are used to compute average rewards for all processes.
         episode_rewards = torch.zeros([num_processes, 1])
         final_rewards = torch.zeros([num_processes, 1])
 
         if self.cuda:
             current_obs = current_obs.cuda()
-            supervised_prob = supervised_prob.cuda()
+           # supervised_prob = supervised_prob.cuda()
             rollouts.cuda()
 
         num_updates = int(num_frames) // self.num_steps // num_processes
 
         start = time.time()
         for j in range(num_updates):
+            rr = np.random.random()
+            supervised_prob = torch.zeros(self.num_steps, num_processes, 1)
+            if self.cuda:
+                supervised_prob = supervised_prob.cuda()
             for step in range(self.num_steps):
 
                 with torch.no_grad():
@@ -257,17 +261,30 @@ class Trainer(object):
                             rollouts.states[step],
                             rollouts.masks[step])
 
-                 # Obser reward and next obs
-                fused = [int(a2) if a1 is None else int(a1) for a1, a2 in zip(
-                         envs.actions, critic_actions)]
+                if rr<=np.exp(-1*(j * num_processes * self.num_steps)/500000):
+                 #   supervised log prob calculation
+                    if None not in envs.actions: 
+                        n_actions = len(self.actions)
+                        for i,(act, true_act) in enumerate(zip(critic_actions,envs.actions)):
+                           if int(act) == int(true_act):
+                               # probability it is correct
+                               prob = p_correct
+                           else:
+                               # assume all wrong choices are uniformily distributed
+                               prob = (1 - p_correct)/(n_actions-1)
 
-                critic_actions = torch.tensor(fused).unsqueeze(1)
+                           supervised_prob[step][i] = prob
+                           #_, _, _ = self.agent.update(rollouts, supervised_prob)
+                    # fused = [int(a2) if a1 is None else int(a1) for a1, a2 in zip(
+                    #     envs.actions, critic_actions)]
 
-                if self.cuda:
-                    critic_actions = critic_actions.cuda()
+                    # critic_actions = torch.tensor(fused).unsqueeze(1)
+
+                    # if self.cuda:
+                    #     critic_actions = critic_actions.cuda()
                 
                 cpu_actions = critic_actions.squeeze(1).cpu().numpy()
-                #cpu_actions = critic_actions.squeeze(1).cpu().numpy()
+                # Obser reward and next obs
                 obs, reward, done, info = envs.step(cpu_actions)
                 #actions = [i['action'] for i in info]
                 #supervised log prob calculation
@@ -308,9 +325,11 @@ class Trainer(object):
                                                     rollouts.states[-1],
                                                     rollouts.masks[-1]).detach()
 
-            rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
-
-            value_loss, action_loss, dist_entropy = self.agent.update(rollouts)
+            rollouts.compute_returns(next_value, True, self.gamma, self.tau)
+            if np.any(supervised_prob.cpu().numpy()):
+                value_loss, action_loss, dist_entropy = self.agent.update(rollouts, supervised_prob)
+            else:
+                value_loss, action_loss, dist_entropy = self.agent.update(rollouts)
 
             rollouts.after_update()
  

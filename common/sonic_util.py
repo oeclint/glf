@@ -314,7 +314,7 @@ class HumanPlay(gym.Wrapper):
     """
     Record gym environment every n episodes
     """
-    def __init__(self, env, actions):
+    def __init__(self, env, actions, p_human = 0.10):
 
         super(HumanPlay, self).__init__(env)
 
@@ -330,26 +330,39 @@ class HumanPlay(gym.Wrapper):
             self.human_actions.append(val)
 
         self.human_step = 0
-        self.rews = [] 
+        self.rews = []
+ 
+        self.p_human = p_human
+        self.is_human = False
 
     @property
     def curr_action(self):
-        if self.human_step < len(self.human_actions):
-            return self.human_actions[self.human_step]
+        if self.is_human:
+            if self.human_step < len(self.human_actions):
+                return self.human_actions[self.human_step]
+            else:
+                print('bug is here')
+                return None
         else:
             return None
 
     @property
     def prev_action(self):
-        if self.human_step-1>=0:
-            return self.human_actions[self.human_step-1]
+        if self.is_human:       
+            if self.human_step-1>=0:
+                return self.human_actions[self.human_step-1]
+            else:
+                return None
         else:
             return None
 
     @property
     def next_action(self):
-        if self.human_step + 1 < len(self.human_actions):
-            return self.human_actions[self.human_step + 1]
+        if self.is_human:
+            if self.human_step + 1 < len(self.human_actions):
+                return self.human_actions[self.human_step + 1]
+            else:
+                return None
         else:
             return None
 
@@ -358,6 +371,10 @@ class HumanPlay(gym.Wrapper):
         obs = self.env.reset(**kwargs)
         self.human_step = 0
         self.rews = []
+
+        self.is_human = False
+        if np.random.random()<=self.p_human:
+            self.is_human = True
 
         return obs
 
@@ -396,6 +413,7 @@ class ReversePlay(gym.Wrapper):
         self._chk_point = []
 
         self.env.reset()
+        self.env.is_human = True
 
         done = False
         i = 0
@@ -415,6 +433,7 @@ class ReversePlay(gym.Wrapper):
 
         self.rew_target = sum(self.env.rews[0:-1]) # reward right before done
         self.time_bonus = sum(self.env.rews) - self.rew_target
+        self.env.reset()
 
     def reset(self, **kwargs):
         
@@ -435,8 +454,8 @@ class ReversePlay(gym.Wrapper):
 
         return obs
 
-    def step(self, action=None, rew_if_done_only=True):
-        
+    def step(self, action=None):
+
         obs, rew, done, info = self.env.step(action)
         # reward approx but exact when back all the way to start
         if not done:
@@ -446,21 +465,17 @@ class ReversePlay(gym.Wrapper):
 
         self.rews.append(rew)
 
-        if rew_if_done_only:
-            rew = 0
-
         if done:
             if sum(self.rews) >= self.rew_target:
                 # only step backward when beats level
                 self.step_backward+=1
-                if rew_if_done_only:
-                    rew = sum(self.rews[1:])
 
         return obs, rew, done, info
 
     @property
     def curr_action(self):
         return self.env.curr_action
+
 
 class EnvMaker(object):
     def __init__(self, game_state, num_processes, actions=None, human_actions=None, scenario=None, 
@@ -541,7 +556,7 @@ class EnvMaker(object):
 
     @classmethod
     def from_human_play(cls, game_state, play_path, scenario='contest', log_dir='log_human', 
-            record_dir='supervised_bk2s', record_interval=10):
+            record_dir='supervised_bk2s', record_interval=10, max_episodes=8):
 
         buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
         actions_map = {}
@@ -564,9 +579,10 @@ class EnvMaker(object):
         processes = []
 
         for k in actions_map:
-            for ep in actions_map[k]:
-                sonic_actions.append(actions_map[k][ep])
-                processes.append(k)
+            for i, ep in enumerate(actions_map[k]):
+                if i < max_episodes:
+                    sonic_actions.append(actions_map[k][ep])
+                    processes.append(k)
 
         num_processes = len(processes)
         return cls(processes, num_processes, None, sonic_actions, scenario, log_dir, record_dir, record_interval)
