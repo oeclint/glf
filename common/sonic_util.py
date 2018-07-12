@@ -341,7 +341,6 @@ class HumanPlay(gym.Wrapper):
             if self.human_step < len(self.human_actions):
                 return self.human_actions[self.human_step]
             else:
-                print('bug is here')
                 return None
         else:
             return None
