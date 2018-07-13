@@ -458,13 +458,14 @@ class ReversePlay(gym.Wrapper):
 
         self.rews.append(rew)
 
-        if done:
-            if sum(self.rews) >= self.rew_target:
-                # only step backward when beats level
-                self._step_backward+=1
+        won = sum(self.rews) >= self.rew_target
+
+        if done and won:
+            # only step backward when beats level
+            self._step_backward+=1
 
         if self._reward_when_done:
-            if done:  
+            if done and won:  
                 rew = sum(self.rews)
             else:
                 rew = 0
