@@ -10,6 +10,7 @@ import json
 from glob import glob
 from collections.abc import Sequence
 
+import gym
 from retro_contest.local import make as contest_make
 from retro_contest import StochasticFrameSkip
 from retro import make
@@ -623,6 +624,7 @@ def _make_env(game, state, seed, rank, log_dir=None, scenario=None, action_set=N
             env = contest_make(game,state)
         else:
             env = make(game, state, scenario=scenario)
+            env = gym.wrappers.TimeLimit(env, max_episode_steps=4500)
 
         env.seed(seed + rank)
 
