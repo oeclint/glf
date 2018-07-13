@@ -658,8 +658,8 @@ def _make_env(game, state, seed, rank, log_dir=None, scenario=None, action_set=N
         if actions is not None:
             henv = HumanPlay(env, actions)
             senv = StochasticFrameSkip(env, n=4, stickprob=0.25)
-            env = StochasticHumanPlay(senv, henv, humanprob=0.10)
-            env = ReversePlay(env, 500)
+            env = StochasticHumanPlay(senv, henv, humanprob=0.05)
+#            env = ReversePlay(env, 500)
 
         return env
 
@@ -736,10 +736,10 @@ if __name__ == "__main__":
 
     maker = EnvMaker.from_human_play(game_state=[('SonicTheHedgehog-Genesis','GreenHillZone.Act1'),
          ('SonicTheHedgehog-Genesis','GreenHillZone.Act3')], play_path='../../glf/play/human', scenario='contest', log_dir=None,
-        record_dir='../../test_bk2s',record_interval=1, max_episodes=8)
+        record_dir='../../test_bk2s',record_interval=1, max_episodes=4)
     envs = maker.vec_env
 
     envs.reset()
     while True:
-        _obs, _rew, done, _info = envs.step([None]*envs.num_envs)
+        _obs, _rew, done, _info = envs.step(np.random.randint(0, len(maker.action_set), envs.num_envs))
         envs.render()
