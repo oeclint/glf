@@ -11,11 +11,14 @@ from glob import glob
 from collections.abc import Sequence
 
 from retro_contest.local import make as contest_make
+from retro_contest import StochasticFrameSkip
 from retro import make
+
 from baselines import bench
 from baselines.common.vec_env import VecEnvWrapper
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
+
 from glf.common.containers import OrderedSet
 
 import torch
@@ -409,7 +412,7 @@ class ReversePlay(gym.Wrapper):
         while not done:
 
             if i % interval == 0:
-                self._chk_point.append((i , cum_rew, init_state, self.env.henv.unwrapped.em.get_state()))
+                self._chk_point.append((i, cum_rew, init_state, self.env.henv.unwrapped.em.get_state()))
 
             if (i+1) % interval == 0:
                 init_state = self.env.henv.unwrapped.em.get_state()
@@ -638,6 +641,8 @@ def _make_env(game, state, seed, rank, log_dir=None, scenario=None, action_set=N
         env = SonicActDiscretizer(env, action_set)
         if actions is not None:
             env = HumanPlay(env, actions)
+            senv = StochasticFrameSkip(env, n=4, stickprob=0.25)
+            env = StochasticHumanPlay(senv, henv, humanprob=0.15)
             env = ReversePlay(env, 500)
 
         return env
