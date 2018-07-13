@@ -487,6 +487,7 @@ class StochasticHumanPlay(gym.Wrapper):
         self._humanprob = humanprob
         self.is_human = False
         self.henv = henv
+        self.rng = np.random.RandomState()
 
     def reset(self, **kwargs):
 
@@ -494,7 +495,7 @@ class StochasticHumanPlay(gym.Wrapper):
         obs = self.env.reset(**kwargs)
 
         self.is_human = False
-        if np.random.random()<=self._humanprob:
+        if self.rng.rand() < self._humanprob:
             self.is_human = True
 
         return obs
