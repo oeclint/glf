@@ -642,7 +642,7 @@ def _make_env(game, state, seed, rank, log_dir=None, scenario=None, action_set=N
         env = AllowBacktracking(env)
         env = SonicActDiscretizer(env, action_set)
         if actions is not None:
-            env = HumanPlay(env, actions)
+            henv = HumanPlay(env, actions)
             senv = StochasticFrameSkip(env, n=4, stickprob=0.25)
             env = StochasticHumanPlay(senv, henv, humanprob=0.15)
             env = ReversePlay(env, 500)
