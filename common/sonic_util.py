@@ -583,7 +583,7 @@ class EnvMaker(object):
 
     @classmethod
     def from_human_play(cls, game_state, play_path, scenario='contest', log_dir='log_human', 
-            record_dir='supervised_bk2s', record_interval=10, max_episodes=8):
+            record_dir='supervised_bk2s', record_interval=10, max_episodes=None):
 
         buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
         actions_map = {}
@@ -604,6 +604,9 @@ class EnvMaker(object):
 
         sonic_actions = []
         processes = []
+
+        if max_episodes is None:
+            max_episodes = float('inf')
 
         for k in actions_map:
             for i, ep in enumerate(actions_map[k]):
