@@ -647,7 +647,7 @@ def _make_env(game, state, seed, rank, log_dir=None, scenario=None, action_set=N
         if actions is not None:
             henv = HumanPlay(env, actions)
             senv = StochasticFrameSkip(env, n=4, stickprob=0.25)
-            env = StochasticHumanPlay(senv, henv, humanprob=0.15)
+            env = StochasticHumanPlay(senv, henv, humanprob=0.10)
             env = ReversePlay(env, 500)
 
         return env
