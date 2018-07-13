@@ -462,7 +462,9 @@ class ReversePlay(gym.Wrapper):
 
         if done and won:
             # only step backward when beats level
-            self._step_backward+=1
+            # with no human demonstration
+            if not self.env.is_human:
+                self._step_backward+=1
 
         if self._reward_when_done:
             if done and won:  
