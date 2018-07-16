@@ -109,7 +109,7 @@ class Trainer(object):
 
         envs = maker.vec_env
 
-        self._train(envs, lr, num_frames, num_processes, log_name)
+        self._train(envs, lr, num_frames, num_processes, log_interval, log_name)
 
     def train_from_human(self,game_state,lr=1e-4,num_frames=10e6,log_dir='log_human',log_interval=10,
         log_name='supervised_rewards.csv',record_dir='supervised_bk2s',record_interval=10,
@@ -122,9 +122,9 @@ class Trainer(object):
 
         num_processes = envs.num_envs
 
-        self._train(envs, lr, num_frames, num_processes, log_name)
+        self._train(envs, lr, num_frames, num_processes, log_interval, log_name)
 
-    def _train(self, envs, lr, num_frames, num_processes, log_name):
+    def _train(self, envs, lr, num_frames, num_processes, log_interval, log_name):
 
         obs_shape = envs.observation_space.shape
         obs_shape = (obs_shape[0] * self.num_stack, *obs_shape[1:])
