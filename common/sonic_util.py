@@ -367,7 +367,6 @@ class HumanPlay(gym.Wrapper):
 
     def step(self, action = None, exceeds_human_steps = True):
 
-        #if action is None:
         action = self.curr_action
         
         obs, rew, done, info = self.env.step(action)
@@ -386,106 +385,11 @@ class HumanPlay(gym.Wrapper):
         for i in range(steps):
             obs, rew, done, info = self.step()
 
-class ReversePlay(gym.Wrapper):
-    """
-    Record gym environment every n episodes
-    """
-    def __init__(self, env, interval, reward_when_done = True):
-
-        super(ReversePlay, self).__init__(env)
-
-        self._reward_when_done = reward_when_done
-
-        self._step_backward = 1
-
-        self._chk_point = []
-
-        self.env.henv.reset()
-
-        done = False
-        i = 0
-
-        cum_rew = 0
-        self.rews = [cum_rew]
-
-        init_state = self.env.henv.unwrapped.initial_state
-
-        while not done:
-
-            if i % interval == 0:
-                self._chk_point.append((i, cum_rew, init_state, self.env.henv.unwrapped.em.get_state()))
-
-            if (i+1) % interval == 0:
-                init_state = self.env.henv.unwrapped.em.get_state()
-
-            obs, rew, done, info = self.env.henv.step(None)
-            cum_rew = sum(self.env.henv.rews)
-
-            i+=1
-
-        self.rew_target = sum(self.env.henv.rews[0:-1]) # reward right before done
-        self.end_bonus = sum(self.env.henv.rews) - self.rew_target
-        self.env.henv.reset()
-
-    def reset(self, **kwargs):
-        
-        if self._step_backward <= len(self._chk_point):
-            step, rew, init_state, state = self._chk_point[-1*self._step_backward]
-        else:
-            step, rew, init_state, state = self._chk_point[0]
-
-        self.rews = [rew]
-
-        self.env.unwrapped.initial_state = init_state
-
-        obs = self.env.reset(**kwargs)
-
-        self.env.unwrapped.em.set_state(state)
-
-        if self.env.is_human:
-            self.env.henv.human_step = step
-
-        return obs
-
-    def step(self, action):
-
-        obs, rew, done, info = self.env.step(action)
-        # reward approx but exact when back all the way to start
-        if not done:
-            rew = rew * (self.rew_target - self.rews[0])/(self.rew_target)
-        else:
-            rew = self.end_bonus
-
-        self.rews.append(rew)
-
-        won = sum(self.rews) >= self.rew_target
-
-        if done and won:
-            # only step backward when beats level
-            # with no human demonstration
-            if not self.env.is_human:
-                self._step_backward+=1
-
-        if self._reward_when_done:
-            if done and won:  
-                rew = sum(self.rews)
-            else:
-                rew = 0
-
-        return obs, rew, done, info
-
-    @property
-    def curr_action(self):
-        if self.env.is_human:
-            return self.env.henv.curr_action
-        else:
-            return None
-
 class StochasticHumanPlay(gym.Wrapper):
     def __init__(self, env, henv, humanprob):
         super(StochasticHumanPlay, self).__init__(env)
         self._humanprob = humanprob
-        self.is_human = False
+        self._is_human = False
         self.henv = henv
         self.rng = np.random.RandomState()
 
@@ -494,14 +398,14 @@ class StochasticHumanPlay(gym.Wrapper):
         self.henv.reset(**kwargs)
         obs = self.env.reset(**kwargs)
 
-        self.is_human = False
+        self._is_human = False
         if self.rng.rand() < self._humanprob:
-            self.is_human = True
+            self._is_human = True
 
         return obs
 
-    def step(self, action): # pylint: disable=E0202
-        if self.is_human:
+    def step(self, action):
+        if self._is_human:
             obs, rew, done, info = self.henv.step(None)
         else:
             obs, rew, done, info = self.env.step(action)
@@ -509,11 +413,8 @@ class StochasticHumanPlay(gym.Wrapper):
         return obs, rew, done, info
 
     @property
-    def curr_action(self):
-        if self.is_human:
-            return self.henv.curr_action
-        else:
-            return None
+    def is_human(self):
+        return self._is_human
 
 class EnvMaker(object):
     def __init__(self, game_state, num_processes, actions=None, human_actions=None, scenario=None, 
@@ -659,7 +560,6 @@ def _make_env(game, state, seed, rank, log_dir=None, scenario=None, action_set=N
             henv = HumanPlay(env, actions)
             senv = StochasticFrameSkip(env, n=4, stickprob=0.25)
             env = StochasticHumanPlay(senv, henv, humanprob=0.1)
-#            env = ReversePlay(env, 500)
 
         return env
 
@@ -688,8 +588,12 @@ class HumanActionVecEnv(VecEnvWrapper):
                     break
                 elif cmd == 'get_spaces':
                     remote.send((env.observation_space, env.action_space))
-                elif cmd == 'get_actions':
-                    remote.send(env.curr_action)
+                elif cmd == 'is_human':
+                    if hasattr(env, 'is_human'):
+                        is_human = env.is_human
+                    else:
+                        is_human = False
+                    remote.send(is_human)
                 else:
                     raise NotImplementedError
         VecEnv.worker = worker
@@ -705,9 +609,9 @@ class HumanActionVecEnv(VecEnvWrapper):
         return obs, rews, dones, infos
 
     @property
-    def actions(self):
+    def is_human(self):
         for remote in self.venv.remotes:
-            remote.send(('get_actions', None))
+            remote.send(('is_human', None))
         return np.stack([remote.recv() for remote in self.venv.remotes])
 
 def make_vec_env(envs):

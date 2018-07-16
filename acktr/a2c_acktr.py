@@ -31,10 +31,10 @@ class A2C_ACKTR(object):
                 actor_critic.parameters(), lr, eps=eps, alpha=alpha)
 
     def update(self, rollouts, human_proc=None):
-        supervised_probs=None
         obs_shape = rollouts.observations.size()[2:]
         action_shape = rollouts.actions.size()[-1]
         num_steps, num_processes, _ = rollouts.rewards.size()
+
         values, action_log_probs, dist_entropy, states = self.actor_critic.evaluate_actions(
             rollouts.observations[:-1].view(-1, *obs_shape),
             rollouts.states[0].view(-1, self.actor_critic.state_size),
@@ -46,6 +46,14 @@ class A2C_ACKTR(object):
 
         advantages = rollouts.returns[:-1] - values
         value_loss = advantages.pow(2).mean()
+
+        if human_proc is None:
+            action_loss = -(advantages.detach() * action_log_probs).mean()
+        else:
+            not_human = ~human_proc
+            keep = np.where(not_human)[0]
+            # do not use human demonstration advantages to update log probs
+            action_loss = -(advantages.detach()[:,keep,:] * action_log_probs[:,keep,:]).mean()            
 
         if self.acktr and self.optimizer.steps % self.optimizer.Ts == 0:
             # Sampled fisher, see Martens 2014
@@ -65,22 +73,9 @@ class A2C_ACKTR(object):
             self.optimizer.acc_stats = False
 
         self.optimizer.zero_grad()
-        if supervised_probs is not None:
-            supervised_probs = supervised_probs.view(num_steps, num_processes, 1)
-            log_prob_loss_fn = nn.KLDivLoss()
-            action_loss = log_prob_loss_fn(action_log_probs, supervised_probs)
-            (value_loss * self.value_loss_coef + action_loss).backward()
-        else:
-            if human_proc is None:
-                action_loss = -(advantages.detach() * action_log_probs).mean()
-                (value_loss * self.value_loss_coef + action_loss - \
-                    dist_entropy * self.entropy_coef).backward()
-            else:
-                not_human = ~human_proc
-                keep = np.where(not_human)[0]
-                action_loss = -(advantages.detach()[:,keep,:] * action_log_probs[:,keep,:]).mean()
-                (value_loss * self.value_loss_coef + action_loss - \
-                    dist_entropy * self.entropy_coef).backward()
+        (value_loss * self.value_loss_coef + action_loss -
+         dist_entropy * self.entropy_coef).backward()
+
         if self.acktr == False:
             nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                      self.max_grad_norm)

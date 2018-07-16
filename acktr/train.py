@@ -204,7 +204,7 @@ class Trainer(object):
                 csvwriter.writekvs(kv)
 
     def train_from_human(self,game_state,lr=1e-4,num_frames=10e6,log_dir='log_human',log_interval=10,
-        record_dir='supervised_bk2s',record_interval=10,play_path='human',scenario='contest',p_correct=0.95):
+        record_dir='supervised_bk2s',record_interval=10,play_path='human',scenario='contest'):
 
         maker = EnvMaker.from_human_play(game_state=game_state, play_path=play_path, scenario=scenario, log_dir=log_dir,
             record_dir=record_dir,record_interval=record_interval)
@@ -235,14 +235,13 @@ class Trainer(object):
         update_current_obs(current_obs, obs, envs, self.num_stack)
         rollouts.observations[0].copy_(current_obs)
 
-        supervised_prob = torch.zeros(self.num_steps, num_processes, 1)
         # These variables are used to compute average rewards for all processes.
         episode_rewards = torch.zeros([num_processes, 1])
         final_rewards = torch.zeros([num_processes, 1])
         is_human = np.array([[False]*num_processes]*self.num_steps)
+
         if self.cuda:
             current_obs = current_obs.cuda()
-            supervised_prob = supervised_prob.cuda()
             rollouts.cuda()
 
         num_updates = int(num_frames) // self.num_steps // num_processes
@@ -252,41 +251,14 @@ class Trainer(object):
             for step in range(self.num_steps):
 
                 with torch.no_grad():
-                    value, critic_actions, action_log_prob, states = actor_critic.act(
+                    value, actor_actions, action_log_prob, states = actor_critic.act(
                             rollouts.observations[step],
                             rollouts.states[step],
                             rollouts.masks[step])
 
-                 # Obser reward and next obs
-                #fused = [int(a2) if a1 is None else int(a1) for a1, a2 in zip(
-                #         envs.actions, critic_actions)]
-                is_human[step] = [False if a is None else True for a in envs.actions]
-                #critic_actions = torch.tensor(fused).unsqueeze(1)
-
-                #if self.cuda:
-                #    critic_actions = critic_actions.cuda()
+                is_human[step] = envs.is_human
                 
-                cpu_actions = critic_actions.squeeze(1).cpu().numpy()
-                #cpu_prob = np.exp(action_log_prob.squeeze(1).cpu().numpy())
-                #cpu_actions = critic_actions.squeeze(1).cpu().numpy()
-#                obs, reward, done, info = envs.step(cpu_actions)
-                #actions = [i['action'] for i in info]
-                #supervised log prob calculation
-                #n_actions = len(self.actions)
-                #for i,(act, true_act) in enumerate(zip(critic_actions,envs.actions)):
-                #    if true_act is not None:
-                        #human
-                #        if int(act) == int(true_act):
-                #        # probability it is correct
-                #            prob = p_correct
-                #        else:
-                        # assume all wrong choices are uniformily distributed
-                #            prob = (1 - p_correct)/(n_actions-1)
-
-                #        supervised_prob[step][i] = prob
-                #    else:
-                        #not human, revert to default
-                #        supervised_prob[step][i] = float(cpu_prob[i])
+                cpu_actions = actor_actions.squeeze(1).cpu().numpy()
 
                 obs, reward, done, info = envs.step(cpu_actions)  
                 reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
@@ -307,8 +279,7 @@ class Trainer(object):
                     current_obs *= masks
 
                 update_current_obs(current_obs, obs, envs, self.num_stack)
-
-                rollouts.insert(current_obs, states, critic_actions, action_log_prob, value, reward, masks)
+                rollouts.insert(current_obs, states, actor_actions, action_log_prob, value, reward, masks)
           
             with torch.no_grad():
                 next_value = actor_critic.get_value(rollouts.observations[-1],
@@ -316,8 +287,9 @@ class Trainer(object):
                                                     rollouts.masks[-1]).detach()
 
             rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
+
             human_proc = np.any(is_human,axis=0)
-            if any(human_proc):
+            if np.any(human_proc):
                 value_loss, action_loss, dist_entropy = self.agent.update(rollouts, human_proc)
             else:
                 value_loss, action_loss, dist_entropy = self.agent.update(rollouts)
@@ -329,17 +301,20 @@ class Trainer(object):
                 total_num_steps = (j + 1) * num_processes * self.num_steps
 
                 kv = OrderedMapping([("updates", j),
-                                  ("num timesteps", total_num_steps),
+                                  ("num_timesteps", total_num_steps),
                                   ("FPS", int(total_num_steps / (end - start))),
-                                  ("mean reward", final_rewards.mean().item()),
-                                  ("median reward", final_rewards.median().item()),
-                                  ("min reward", final_rewards.min().item()),
-                                  ("max reward", final_rewards.max().item()),
-                                  ("value loss", value_loss * self.agent.value_loss_coef),
-                                  ("action loss", action_loss),
-                                  ("dist entropy", dist_entropy * self.agent.entropy_coef)])
+                                  ("mean_reward", final_rewards.mean().item()),
+                                  ("median_reward", final_rewards.median().item()),
+                                  ("min_reward", final_rewards.min().item()),
+                                  ("max_reward", final_rewards.max().item()),
+                                  ("value_loss", value_loss * self.agent.value_loss_coef),
+                                  ("action_loss", action_loss),
+                                  ("dist_entropy", dist_entropy * self.agent.entropy_coef)])
 
                 csvwriter.writekvs(kv)
+
+    def _train(self):
+        pass
 
 if __name__ == '__main__':
     t = Trainer()
