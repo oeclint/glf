@@ -451,10 +451,10 @@ class ReversePlay(gym.Wrapper):
 
         obs, rew, done, info = self.env.step(action)
         # reward approx but exact when back all the way to start
-        if not done:
-            rew = rew * (self.rew_target - self.rews[0])/(self.rew_target)
-        else:
-            rew = self.end_bonus
+#        if not done:
+#            rew = rew * (self.rew_target - self.rews[0])/(self.rew_target)
+#        else:
+#            rew = self.end_bonus
 
         self.rews.append(rew)
 
@@ -462,7 +462,6 @@ class ReversePlay(gym.Wrapper):
 
         if done and won:
             # only step backward when beats level
-            # with no human demonstration
             if not self.env.is_human:
                 self._step_backward+=1
 
@@ -487,7 +486,6 @@ class StochasticHumanPlay(gym.Wrapper):
         self._humanprob = humanprob
         self.is_human = False
         self.henv = henv
-        self.rng = np.random.RandomState()
 
     def reset(self, **kwargs):
 
@@ -495,7 +493,7 @@ class StochasticHumanPlay(gym.Wrapper):
         obs = self.env.reset(**kwargs)
 
         self.is_human = False
-        if self.rng.rand() < self._humanprob:
+        if np.random.random()<=self._humanprob:
             self.is_human = True
 
         return obs
@@ -658,7 +656,7 @@ def _make_env(game, state, seed, rank, log_dir=None, scenario=None, action_set=N
         if actions is not None:
             henv = HumanPlay(env, actions)
             senv = StochasticFrameSkip(env, n=4, stickprob=0.25)
-            env = StochasticHumanPlay(senv, henv, humanprob=0.1)
+            env = StochasticHumanPlay(senv, henv, humanprob=0.01)
 #            env = ReversePlay(env, 500)
 
         return env
@@ -736,10 +734,10 @@ if __name__ == "__main__":
 
     maker = EnvMaker.from_human_play(game_state=[('SonicTheHedgehog-Genesis','GreenHillZone.Act1'),
          ('SonicTheHedgehog-Genesis','GreenHillZone.Act3')], play_path='../../glf/play/human', scenario='contest', log_dir=None,
-        record_dir='../../test_bk2s',record_interval=1, max_episodes=4)
+        record_dir='../../test_bk2s',record_interval=1, max_episodes=8)
     envs = maker.vec_env
 
     envs.reset()
     while True:
-        _obs, _rew, done, _info = envs.step(np.random.randint(0, len(maker.action_set), envs.num_envs))
+        _obs, _rew, done, _info = envs.step([None]*envs.num_envs)
         envs.render()

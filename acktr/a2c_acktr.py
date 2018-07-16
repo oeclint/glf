@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
+import numpy as np
 from glf.acktr.kfac import KFACOptimizer
 
 
@@ -30,7 +30,8 @@ class A2C_ACKTR(object):
             self.optimizer = optim.RMSprop(
                 actor_critic.parameters(), lr, eps=eps, alpha=alpha)
 
-    def update(self, rollouts, supervised_probs=None):
+    def update(self, rollouts, human_proc=None):
+        supervised_probs=None
         obs_shape = rollouts.observations.size()[2:]
         action_shape = rollouts.actions.size()[-1]
         num_steps, num_processes, _ = rollouts.rewards.size()
@@ -68,12 +69,18 @@ class A2C_ACKTR(object):
             supervised_probs = supervised_probs.view(num_steps, num_processes, 1)
             log_prob_loss_fn = nn.KLDivLoss()
             action_loss = log_prob_loss_fn(action_log_probs, supervised_probs)
-            action_loss.backward()
+            (value_loss * self.value_loss_coef + action_loss).backward()
         else:
-            action_loss = -(advantages.detach() * action_log_probs).mean()
-            (value_loss * self.value_loss_coef + action_loss - \
-                 dist_entropy * self.entropy_coef).backward()
-
+            if human_proc is None:
+                action_loss = -(advantages.detach() * action_log_probs).mean()
+                (value_loss * self.value_loss_coef + action_loss - \
+                    dist_entropy * self.entropy_coef).backward()
+            else:
+                not_human = ~human_proc
+                keep = np.where(not_human)[0]
+                action_loss = -(advantages.detach()[:,keep,:] * action_log_probs[:,keep,:]).mean()
+                (value_loss * self.value_loss_coef + action_loss - \
+                    dist_entropy * self.entropy_coef).backward()
         if self.acktr == False:
             nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
                                      self.max_grad_norm)

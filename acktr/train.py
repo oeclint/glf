@@ -203,7 +203,7 @@ class Trainer(object):
 
                 csvwriter.writekvs(kv)
 
-    def train_from_human(self,game_state,lr=1e-3,num_frames=10e6,log_dir='log_human',log_interval=10,
+    def train_from_human(self,game_state,lr=1e-4,num_frames=10e6,log_dir='log_human',log_interval=10,
         record_dir='supervised_bk2s',record_interval=10,play_path='human',scenario='contest',p_correct=0.95):
 
         maker = EnvMaker.from_human_play(game_state=game_state, play_path=play_path, scenario=scenario, log_dir=log_dir,
@@ -239,7 +239,7 @@ class Trainer(object):
         # These variables are used to compute average rewards for all processes.
         episode_rewards = torch.zeros([num_processes, 1])
         final_rewards = torch.zeros([num_processes, 1])
-
+        is_human = np.array([[False]*num_processes]*self.num_steps)
         if self.cuda:
             current_obs = current_obs.cuda()
             supervised_prob = supervised_prob.cuda()
@@ -258,30 +258,37 @@ class Trainer(object):
                             rollouts.masks[step])
 
                  # Obser reward and next obs
-                fused = [int(a2) if a1 is None else int(a1) for a1, a2 in zip(
-                         envs.actions, critic_actions)]
+                #fused = [int(a2) if a1 is None else int(a1) for a1, a2 in zip(
+                #         envs.actions, critic_actions)]
+                is_human[step] = [False if a is None else True for a in envs.actions]
+                #critic_actions = torch.tensor(fused).unsqueeze(1)
 
-                critic_actions = torch.tensor(fused).unsqueeze(1)
-
-                if self.cuda:
-                    critic_actions = critic_actions.cuda()
+                #if self.cuda:
+                #    critic_actions = critic_actions.cuda()
                 
                 cpu_actions = critic_actions.squeeze(1).cpu().numpy()
+                #cpu_prob = np.exp(action_log_prob.squeeze(1).cpu().numpy())
                 #cpu_actions = critic_actions.squeeze(1).cpu().numpy()
-                obs, reward, done, info = envs.step(cpu_actions)
+#                obs, reward, done, info = envs.step(cpu_actions)
                 #actions = [i['action'] for i in info]
                 #supervised log prob calculation
                 #n_actions = len(self.actions)
-                #for i,(act, true_act) in enumerate(zip(critic_actions,actions)):
-                #    if int(act) == int(true_act):
+                #for i,(act, true_act) in enumerate(zip(critic_actions,envs.actions)):
+                #    if true_act is not None:
+                        #human
+                #        if int(act) == int(true_act):
                 #        # probability it is correct
-                #        prob = p_correct
-                #    else:
-                #        # assume all wrong choices are uniformily distributed
-                #        prob = (1 - p_correct)/(n_actions-1)
+                #            prob = p_correct
+                #        else:
+                        # assume all wrong choices are uniformily distributed
+                #            prob = (1 - p_correct)/(n_actions-1)
 
-                #    supervised_prob[step][i] = prob
-  
+                #        supervised_prob[step][i] = prob
+                #    else:
+                        #not human, revert to default
+                #        supervised_prob[step][i] = float(cpu_prob[i])
+
+                obs, reward, done, info = envs.step(cpu_actions)  
                 reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
                 episode_rewards += reward
 
@@ -309,8 +316,11 @@ class Trainer(object):
                                                     rollouts.masks[-1]).detach()
 
             rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
-
-            value_loss, action_loss, dist_entropy = self.agent.update(rollouts)
+            human_proc = np.any(is_human,axis=0)
+            if any(human_proc):
+                value_loss, action_loss, dist_entropy = self.agent.update(rollouts, human_proc)
+            else:
+                value_loss, action_loss, dist_entropy = self.agent.update(rollouts)
 
             rollouts.after_update()
  
