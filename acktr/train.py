@@ -101,110 +101,19 @@ class Trainer(object):
 
             raise RuntimeError('agent is not set')
    
-    def train(self,game_state,lr=1e-4,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10,record_dir='bk2s',record_interval=100):
+    def train(self,game_state,lr=1e-4,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10, log_name='rewards.csv',
+        record_dir='bk2s',record_interval=10):
 
         maker = EnvMaker(game_state=game_state, num_processes=num_processes, log_dir=log_dir,actions=self.actions,
             record_dir=record_dir, record_interval=record_interval)
 
         envs = maker.vec_env
 
-        obs_shape = envs.observation_space.shape
-        obs_shape = (obs_shape[0] * self.num_stack, *obs_shape[1:])
-
-        if self.agent is None:
-            self.make_agent(lr,obs_shape, envs.action_space)
-        else:
-            self.set_lr(lr)
-
-        actor_critic = self.agent.actor_critic
-
-        if self.gmat is not None:
-            actor_critic.base.set_batches(processes)
-
-        rollouts = RolloutStorage(self.num_steps, num_processes, obs_shape, envs.action_space, actor_critic.state_size)
-        current_obs = torch.zeros(num_processes, *obs_shape)
-
-        obs = envs.reset()
-        update_current_obs(current_obs, obs, envs, self.num_stack)
-        rollouts.observations[0].copy_(current_obs)
-
-        # These variables are used to compute average rewards for all processes.
-        episode_rewards = torch.zeros([num_processes, 1])
-        final_rewards = torch.zeros([num_processes, 1])
-
-        if self.cuda:
-            current_obs = current_obs.cuda()
-            rollouts.cuda()
-
-        num_updates = int(num_frames) // self.num_steps // num_processes
-
-        csvwriter = CSVOutputFormat('rewards.csv')
-
-        start = time.time()
-        for j in range(num_updates):
-            for step in range(self.num_steps):
-                # Sample actions
-                with torch.no_grad():
-                    value, action, action_log_prob, states = actor_critic.act(
-                            rollouts.observations[step],
-                            rollouts.states[step],
-                            rollouts.masks[step])
-                cpu_actions = action.squeeze(1).cpu().numpy()
-                #print(cpu_actions,'machine')
-                # Obser reward and next obs
-                obs, reward, done, info = envs.step(cpu_actions)
-                reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
-                episode_rewards += reward
-
-                # If done then clean the history of observations.
-                masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in done])
-                final_rewards *= masks
-                final_rewards += (1 - masks) * episode_rewards
-                episode_rewards *= masks
-
-                if self.cuda:
-                    masks = masks.cuda()
-
-                if current_obs.dim() == 4:
-                    current_obs *= masks.unsqueeze(2).unsqueeze(2)
-                else:
-                    current_obs *= masks
-
-                update_current_obs(current_obs, obs, envs, self.num_stack)
-                rollouts.insert(current_obs, states, action, action_log_prob, value, reward, masks)
-
-
-            with torch.no_grad():
-                next_value = actor_critic.get_value(rollouts.observations[-1],
-                                                    rollouts.states[-1],
-                                                    rollouts.masks[-1]).detach()
-
-            rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
-
-            value_loss, action_loss, dist_entropy = self.agent.update(rollouts)
-
-            rollouts.after_update()
-
-
-            if j % log_interval == 0:
-                end = time.time()
-                total_num_steps = (j + 1) * num_processes * self.num_steps
-
-                kv = OrderedMapping([("updates", j),
-                                  ("num timesteps", total_num_steps),
-                                  ("FPS", int(total_num_steps / (end - start))),
-                                  ("mean reward", final_rewards.mean().item()),
-                                  ("median reward", final_rewards.median().item()),
-                                  ("min reward", final_rewards.min().item()),
-                                  ("max reward", final_rewards.max().item()),
-                                  ("value loss", value_loss * self.agent.value_loss_coef),
-                                  ("action loss", action_loss),
-                                  ("dist entropy", dist_entropy * self.agent.entropy_coef)])
-
-                csvwriter.writekvs(kv)
+        self._train(envs, lr, num_frames, num_processes, log_name)
 
     def train_from_human(self,game_state,lr=1e-4,num_frames=10e6,log_dir='log_human',log_interval=10,
-        record_dir='supervised_bk2s',record_interval=10,play_path='human',scenario='contest'):
+        log_name='supervised_rewards.csv',record_dir='supervised_bk2s',record_interval=10,
+        play_path='human',scenario='contest'):
 
         maker = EnvMaker.from_human_play(game_state=game_state, play_path=play_path, scenario=scenario, log_dir=log_dir,
             record_dir=record_dir,record_interval=record_interval)
@@ -213,6 +122,10 @@ class Trainer(object):
 
         num_processes = envs.num_envs
 
+        self._train(envs, lr, num_frames, num_processes, log_name)
+
+    def _train(self, envs, lr, num_frames, num_processes, log_name):
+
         obs_shape = envs.observation_space.shape
         obs_shape = (obs_shape[0] * self.num_stack, *obs_shape[1:])
 
@@ -226,7 +139,7 @@ class Trainer(object):
         if self.gmat is not None:
             actor_critic.base.set_batches(processes)
 
-        csvwriter = CSVOutputFormat('supervised_loss.csv')
+        csvwriter = CSVOutputFormat(log_name)
 
         rollouts = RolloutStorage(self.num_steps, num_processes, obs_shape, envs.action_space, actor_critic.state_size)
         current_obs = torch.zeros(num_processes, *obs_shape)
@@ -312,9 +225,6 @@ class Trainer(object):
                                   ("dist_entropy", dist_entropy * self.agent.entropy_coef)])
 
                 csvwriter.writekvs(kv)
-
-    def _train(self):
-        pass
 
 if __name__ == '__main__':
     t = Trainer()
