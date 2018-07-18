@@ -205,14 +205,14 @@ class StochasticHumanPlay(gym.Wrapper):
 
     def reset(self, **kwargs):
 
+        self._is_human = False
+        if self.rng.rand() < self._humanprob:
+            self._is_human = True
+
         if self._is_human:
             obs = self.henv.reset(**kwargs)
         else:
             obs = self.env.reset(**kwargs)
-
-        self._is_human = False
-        if self.rng.rand() < self._humanprob:
-            self._is_human = True
 
         return obs
 
@@ -379,8 +379,6 @@ class EnvMaker(object):
 
         actions_map = self.get_human_actions(supervised_levels)
 
-        self.supervised_levels = set(supervised_levels)
-
         all_actions = []
 
         for game, state in actions_map:
@@ -420,7 +418,8 @@ class EnvMaker(object):
 
                 action_set = [np.array(a) for _,a in sorted(zip(sort_index,actions_tup))]
 
-        self.action_set = action_set     
+        self.action_set = action_set
+        self._actions_map = actions_map     
 
     def get_human_actions(self, game_state):
 
@@ -443,6 +442,7 @@ class EnvMaker(object):
         return actions_map
 
     def make_vec_env(self, game_state, num_processes, log_dir=None, record_dir=None, record_interval=None):
+
         chunks = [num_processes//len(game_state)]*len(game_state)
         chunks[-1]+=num_processes-sum(chunks)
 
@@ -461,23 +461,20 @@ class EnvMaker(object):
 
     def make_human_vec_env(self, game_state, log_dir=None, human_prob=0.1, record_dir=None, record_interval=None, max_episodes=None):
 
-        for game, state in game_state:
-            if (game,state) not in self.supervised_levels:
-                raise KeyError('{} not found'.format((game,state)))
-
-        actions_map = self.get_human_actions(game_state)
-
         sonic_actions = []
         processes = []
 
         if max_episodes is None:
             max_episodes = float('inf')
 
-        for k in actions_map:
-            for i, ep in enumerate(actions_map[k]):
-                if i < max_episodes:
-                    sonic_actions.append(actions_map[k][ep])
-                    processes.append(k)
+        for gs in set(game_state):
+            if gs not in self._actions_map:
+                raise KeyError('{} not found'.format(gs))
+            else:
+                for i, ep in enumerate(self._actions_map[gs]):
+                    if i < max_episodes:
+                        sonic_actions.append(self._actions_map[gs][ep])
+                        processes.append(gs)
 
         num_processes = len(processes)
 
