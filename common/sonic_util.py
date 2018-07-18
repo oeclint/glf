@@ -23,6 +23,13 @@ from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from glf.common.containers import OrderedSet
 
 import torch
+from enum import Enum
+
+class SonicConfig(Enum):
+    BUTTONS = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
+    BUTTONS_SAME_AS = {'B':['B','A','C']},
+    BUTTONS_INACTIVE = ["MODE", "START", "Y", "X", "Z"]
+    DEFAULT_ACTIONS = [['LEFT'], ['RIGHT'], ['B'], ['LEFT', 'DOWN'], ['RIGHT', 'DOWN'], ['DOWN'], ['DOWN', 'B']]
 
 class SonicObsWrapper(gym.ObservationWrapper):
     """
@@ -68,10 +75,10 @@ class SonicActDiscretizer(gym.ActionWrapper):
 
         if actions is None or len(actions) == 0:
 
-            buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
+            buttons = SonicConfig.BUTTONS.value
 
-            sonic_actions = [['LEFT'], ['RIGHT'], ['B'], ['LEFT', 'DOWN'], ['RIGHT', 'DOWN'], ['DOWN'],
-                       ['DOWN', 'B']]
+            sonic_actions = SonicConfig.DEFAULT_ACTIONS.value
+
             actions = []
             for action in sonic_actions:
                 arr = np.array([0] * 12)
@@ -356,9 +363,9 @@ class SonicActions(Sequence):
     @classmethod
     def from_sonic_config(cls, arr):
         return cls( arr,
-                    buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"],
-                    same_as = {'B':['B','A','C']},
-                    inactive = ["MODE", "START", "Y", "X", "Z"])
+                    buttons = SonicConfig.BUTTONS.value,
+                    same_as = SonicConfig.BUTTONS_SAME_AS.value[0],
+                    inactive = SonicConfig.BUTTONS_INACTIVE.value)
                     
     def __len__(self):
         return len(self.data)
@@ -390,7 +397,7 @@ class EnvMaker(object):
         if len(action_set)>0:
             if order_actions:
                 # order key actions, helps with debugging
-                buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
+                buttons = SonicConfig.BUTTONS.value
                 left = [0] * 12
                 left[buttons.index("LEFT")] = 1
                 left = tuple(left)
@@ -459,10 +466,13 @@ class EnvMaker(object):
 
         return _make_vec_env(envs)
 
-    def make_human_vec_env(self, game_state, log_dir=None, human_prob=0.1, record_dir=None, record_interval=None, max_episodes=None):
+    def make_human_vec_env(self, game_state=None, log_dir=None, human_prob=0.1, record_dir=None, record_interval=None, max_episodes=None):
 
         sonic_actions = []
         processes = []
+
+        if game_state is None:
+            game_state = self._actions_map.keys()
 
         if max_episodes is None:
             max_episodes = float('inf')
@@ -548,9 +558,7 @@ if __name__ == "__main__":
     maker = EnvMaker(supervised_levels=[('SonicTheHedgehog-Genesis','GreenHillZone.Act1'),
         ('SonicTheHedgehog-Genesis','GreenHillZone.Act3')], play_path='../../glf/play/human', scenario='contest')
 
-    envs = maker.make_human_vec_env(game_state=[('SonicTheHedgehog-Genesis','GreenHillZone.Act1'), 
-        ('SonicTheHedgehog-Genesis','GreenHillZone.Act3')],log_dir=None,
-            record_dir='../../test_bk2s',record_interval=2, max_episodes=2)
+    envs = maker.make_human_vec_env(log_dir=None,record_dir='../../test_bk2s',record_interval=2, max_episodes=2)
 
     envs.reset()
     while True:
