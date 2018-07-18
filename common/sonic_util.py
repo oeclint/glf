@@ -58,61 +58,6 @@ class SonicObsWrapper(gym.ObservationWrapper):
         # move last axis to first
         return np.moveaxis(observation,-1,0)
 
-def actions_from_human_data(game_state, scenario='scenario', play_path='../play/human', order=True):
-
-    all_actions = []
-    buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
-    actions = {}
-
-    for game, state in set(game_state):
-
-        path = os.path.join(play_path,game,scenario)
-
-        fi = os.path.join(path,'{}-{}.json'.format(game,state))
-
-        with open(fi) as f:
-            actions[(game,state)] = json.load(f)
-
-        for ep in actions[(game,state)]:
-
-            arr = SonicActions.from_sonic_config(actions[(game,state)][ep])
-            actions[(game,state)][ep] = arr
-
-            all_actions+=arr.data.tolist()
-
-    unique_actions = [np.array(a, 'int') for a in set(map(tuple, all_actions))]
-
-    if order:
-
-        left = [0] * 12
-        left[buttons.index("LEFT")] = 1
-        left = tuple(left)
-        right = [0] * 12
-        right[buttons.index("RIGHT")] = 1
-        right = tuple(right)
-        jump = [0] * 12
-        jump[buttons.index("B")] = 1
-        jump = tuple(jump)
-
-        core_actions = tuple([left, right, jump])
-        actions_tup = tuple(map(tuple, unique_actions))
-
-        for core_action in core_actions:
-            if core_action not in actions_tup:
-                raise ValueError("core actions missing in action set")
-
-        sort_index = []
-
-        for act in actions_tup:
-            if act in core_actions:
-                sort_index.append(core_actions.index(act))
-            else:
-                sort_index.append(len(sort_index)+len(core_actions))
-
-        unique_actions = [np.array(a) for _,a in sorted(zip(sort_index,actions_tup))]
-
-    return unique_actions, actions
-
 class SonicActDiscretizer(gym.ActionWrapper):
     """
     Wrap a gym-retro environment and make it use discrete
@@ -121,7 +66,7 @@ class SonicActDiscretizer(gym.ActionWrapper):
     def __init__(self, env, actions = None):
         super(SonicActDiscretizer, self).__init__(env)
 
-        if actions is None:
+        if actions is None or len(actions) == 0:
 
             buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
 
@@ -140,6 +85,235 @@ class SonicActDiscretizer(gym.ActionWrapper):
 
     def action(self, a):
         return self._actions[a].copy()
+
+class AllowBacktracking(gym.Wrapper):
+    """
+    Use deltas in max(X) as the reward, rather than deltas
+    in X. This way, agents are not discouraged too heavily
+    from exploring backwards if there is no way to advance
+    head-on in the level.
+    """
+    def __init__(self, env):
+        super(AllowBacktracking, self).__init__(env)
+        self._cur_x = 0
+        self._max_x = 0
+
+    def reset(self, **kwargs): # pylint: disable=E0202
+        self._cur_x = 0
+        self._max_x = 0
+        return self.env.reset(**kwargs)
+
+    def step(self, action): # pylint: disable=E0202
+        obs, rew, done, info = self.env.step(action)
+        self._cur_x += rew
+        rew = max(0, self._cur_x - self._max_x)
+        self._max_x = max(self._max_x, self._cur_x)
+        return obs, rew, done, info
+
+class EnvRecorder(gym.Wrapper):
+    """
+    Record gym environment every n episodes
+    """
+    def __init__(self, env, record_dir, interval):
+        super(EnvRecorder, self).__init__(env)
+        self.record_dir = record_dir
+        self.interval = interval
+        self.ep_count = 0
+
+    def reset(self, **kwargs): # pylint: disable=E0202
+        if self.ep_count % self.interval == 0:
+            self.env.unwrapped.set_movie_id(self.ep_count)
+            self.env.unwrapped.auto_record(self.record_dir)
+        else:
+            self.env.unwrapped.stop_record()
+        
+        obs = self.env.reset(**kwargs)
+        self.ep_count += 1
+
+        return obs
+
+    def step(self, action): # pylint: disable=E0202
+        obs, rew, done, info = self.env.step(action)
+        return obs, rew, done, info
+
+class HumanPlay(gym.Wrapper):
+    """
+    Record gym environment every n episodes
+    """
+    def __init__(self, env, actions):
+
+        super(HumanPlay, self).__init__(env)
+
+        self.human_actions = actions
+        self.human_step = 0
+ 
+    @property
+    def curr_action(self):
+        if self.human_step < len(self.human_actions):
+            return self.human_actions[self.human_step]
+        else:
+            return None
+
+    @property
+    def prev_action(self):    
+        if self.human_step-1>=0:
+            return self.human_actions[self.human_step-1]
+        else:
+            return None
+
+    @property
+    def next_action(self):
+        if self.human_step + 1 < len(self.human_actions):
+            return self.human_actions[self.human_step + 1]
+        else:
+            return None
+
+    def reset(self, **kwargs):
+
+        obs = self.env.reset(**kwargs)
+        self.human_step = 0
+
+        return obs
+
+    def step(self, action = None, exceeds_human_steps = True):
+
+        action = self.curr_action
+        
+        obs, rew, done, info = self.env.step(action)
+
+        if not exceeds_human_steps:
+            # done if more steps than human
+            if self.next_action is None:
+                done = True
+
+        self.human_step += 1
+
+        return obs, rew, done, info
+
+    def fast_forward(self, steps):
+        for i in range(steps):
+            obs, rew, done, info = self.step()
+
+class StochasticHumanPlay(gym.Wrapper):
+    def __init__(self, env, henv, humanprob):
+        super(StochasticHumanPlay, self).__init__(env)
+        self._humanprob = humanprob
+        self._is_human = False
+        self.henv = henv
+        self.rng = np.random.RandomState()
+        env.unwrapped.set_stoch_env(self)
+
+    def reset(self, **kwargs):
+
+        if self._is_human:
+            obs = self.henv.reset(**kwargs)
+        else:
+            obs = self.env.reset(**kwargs)
+
+        self._is_human = False
+        if self.rng.rand() < self._humanprob:
+            self._is_human = True
+
+        return obs
+
+    def step(self, action):
+        if self._is_human:
+            obs, rew, done, info = self.henv.step(None)
+        else:
+            obs, rew, done, info = self.env.step(action)
+
+        return obs, rew, done, info
+
+    @property
+    def is_human(self):
+        return self._is_human
+
+class RetroWrapper(gym.Wrapper):
+
+    def __init__(self, env, pid=None):
+        super(RetroWrapper, self).__init__(env)
+        self._stoch_env = None
+        self.pid = pid
+
+    def reset(self, **kwargs):
+
+        obs = self.env.reset(**kwargs)
+
+        return obs
+
+    def step(self, action):
+        
+        obs, rew, done, info = self.env.step(action)
+
+        return obs, rew, done, info
+
+    def set_stoch_env(self, env):
+        self._stoch_env = env
+
+    @property
+    def is_human(self):
+        if self._stoch_env is None:
+            return False
+        else:
+            return self._stoch_env.is_human
+
+    @property
+    def unwrapped(self):
+        return self
+
+    def auto_record(self, *args, **kwargs):
+        self.env.unwrapped.auto_record(*args, **kwargs)
+
+    def stop_record(self):
+        self.env.unwrapped.stop_record()
+
+    def set_movie_id(self, mid):
+        self.env.unwrapped.movie_id = mid
+
+class SubprocVecEnvWrapper(VecEnvWrapper):
+    def __init__(self, env_fns, spaces=None):
+        import baselines.common.vec_env.subproc_vec_env as VecEnv
+        def worker(remote, parent_remote, env_fn_wrapper):
+            parent_remote.close()
+            env = env_fn_wrapper.x()
+            while True:
+                cmd, data = remote.recv()
+                if cmd == 'step':
+                    ob, reward, done, info = env.step(data)
+                    if done:
+                        ob = env.reset()
+                    remote.send((ob, reward, done, info))
+                elif cmd == 'reset':
+                    ob = env.reset()
+                    remote.send(ob)
+                elif cmd == 'render':
+                    remote.send(env.render(mode='rgb_array'))
+                elif cmd == 'close':
+                    remote.close()
+                    break
+                elif cmd == 'get_spaces':
+                    remote.send((env.observation_space, env.action_space))
+                elif cmd == 'is_human':
+                    remote.send(env.unwrapped.is_human)
+                else:
+                    raise NotImplementedError
+        VecEnv.worker = worker
+        venv = VecEnv.SubprocVecEnv(env_fns, spaces)
+        VecEnvWrapper.__init__(self, venv)
+
+    def reset(self):
+        obs = self.venv.reset()
+        return obs
+
+    def step_wait(self):
+        obs, rews, dones, infos = self.venv.step_wait()
+        return obs, rews, dones, infos
+
+    @property
+    def is_human(self):
+        for remote in self.venv.remotes:
+            remote.send(('is_human', None))
+        return np.stack([remote.recv() for remote in self.venv.remotes])
 
 class SonicActions(Sequence):
 
@@ -186,261 +360,36 @@ class SonicActions(Sequence):
                     same_as = {'B':['B','A','C']},
                     inactive = ["MODE", "START", "Y", "X", "Z"])
                     
-    def pad_zeros(self,shape):
-        result = np.zeros(shape,'int')
-        result[:self.data.shape[0],:self.data.shape[1]]=self.data
-        return result
-        
-    def group_by(self,by):
-        r,c = self.data.shape
-        data = self.data
-        if r % by != 0:
-            while r % by != 0:
-                r = r+1
-            data = self.tile((r,c))
-        return data.reshape(int(r/by),by,c)
-
-    def map(self, indexer):
-        arr = []
-        for i in self.data:
-            val = indexer[tuple(i)]
-            if isinstance(val, (Sequence, np.ndarray)):
-                val = list(val)
-            else:
-                val = [val]
-            arr.append(val)
-        return SonicActions(arr)
-
-    def tile(self, shape):
-        tile_len = len(self.data)
-        arr = self.pad_zeros(shape)
-        r,c = shape
-        for i in range(0, r, tile_len):
-            if i != 0:
-                slc = arr[i:i+tile_len]
-                arr[i:i+len(slc)] = arr[0:len(slc)]
-
-        return arr
-        
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, index):
         return self.data[index]
 
-class SonicActionsVec(object):
-
-    def __init__(self,actions):
-
-        self.actions = actions
-        self.row = max([s.data.shape[0] for s in actions])
-        self.col = actions[0].data.shape[1]
-
-        if not all([s.data.shape[1]==self.col for s in actions]):
-            raise ValueError('Expected all arrays to have same number of columns')
-
-    def stack_by(self,by):
-
-        max_row = self.row
-
-        if max_row % by != 0:
-            while max_row % by != 0:
-                max_row = max_row+1
-
-        arr = []
-        for action in self.actions:
-            if action.data.shape[0] < max_row:
-                action = SonicActions(action.tile((max_row, self.col)))
-            arr.append(action)
-
-        return np.stack([a.group_by(by) for a in arr],axis=2)
-
-    def discretize(self, actions):
-
-        action_indexer = {}
-
-        for i, a in enumerate(actions):
-            action_indexer[tuple(a)] = i
-
-        return SonicActionsVec([action.map(action_indexer) for action in self.actions])
-
-class AllowBacktracking(gym.Wrapper):
-    """
-    Use deltas in max(X) as the reward, rather than deltas
-    in X. This way, agents are not discouraged too heavily
-    from exploring backwards if there is no way to advance
-    head-on in the level.
-    """
-    def __init__(self, env):
-        super(AllowBacktracking, self).__init__(env)
-        self._cur_x = 0
-        self._max_x = 0
-
-    def reset(self, **kwargs): # pylint: disable=E0202
-        self._cur_x = 0
-        self._max_x = 0
-        return self.env.reset(**kwargs)
-
-    def step(self, action): # pylint: disable=E0202
-        obs, rew, done, info = self.env.step(action)
-        self._cur_x += rew
-        rew = max(0, self._cur_x - self._max_x)
-        self._max_x = max(self._max_x, self._cur_x)
-        return obs, rew, done, info
-
-class EnvRecorder(gym.Wrapper):
-    """
-    Record gym environment every n episodes
-    """
-    def __init__(self, env, record_dir, interval):
-        super(EnvRecorder, self).__init__(env)
-        self.record_dir = record_dir
-        self.interval = interval
-        self.ep_count = 0
-
-    def reset(self, **kwargs): # pylint: disable=E0202
-        if self.ep_count % self.interval == 0:
-            self.env.unwrapped.movie_id = self.ep_count
-            self.env.unwrapped.auto_record(self.record_dir)
-        else:
-            self.env.unwrapped.stop_record()
-        
-        obs = self.env.reset(**kwargs)
-        self.ep_count += 1
-
-        return obs
-
-    def step(self, action): # pylint: disable=E0202
-        obs, rew, done, info = self.env.step(action)
-        return obs, rew, done, info
-
-class HumanPlay(gym.Wrapper):
-    """
-    Record gym environment every n episodes
-    """
-    def __init__(self, env, actions):
-
-        super(HumanPlay, self).__init__(env)
-
-        self.human_actions = []
-
-        action_indexer = {}
-
-        for i, a in enumerate(env._actions):
-            action_indexer[tuple(a)] = i
-
-        for a in actions:
-            val = action_indexer[tuple(a)]
-            self.human_actions.append(val)
-
-        self.human_step = 0
-        self.rews = []
- 
-    @property
-    def curr_action(self):
-        if self.human_step < len(self.human_actions):
-            return self.human_actions[self.human_step]
-        else:
-            return None
-
-    @property
-    def prev_action(self):    
-        if self.human_step-1>=0:
-            return self.human_actions[self.human_step-1]
-        else:
-            return None
-
-    @property
-    def next_action(self):
-        if self.human_step + 1 < len(self.human_actions):
-            return self.human_actions[self.human_step + 1]
-        else:
-            return None
-
-    def reset(self, **kwargs):
-
-        obs = self.env.reset(**kwargs)
-        self.human_step = 0
-        self.rews = []
-
-        return obs
-
-    def step(self, action = None, exceeds_human_steps = True):
-
-        action = self.curr_action
-        
-        obs, rew, done, info = self.env.step(action)
-
-        if not exceeds_human_steps:
-            # done if more steps than human
-            if self.next_action is None:
-                done = True
-
-        self.human_step += 1
-        self.rews.append(rew)
-
-        return obs, rew, done, info
-
-    def fast_forward(self, steps):
-        for i in range(steps):
-            obs, rew, done, info = self.step()
-
-class StochasticHumanPlay(gym.Wrapper):
-    def __init__(self, env, henv, humanprob):
-        super(StochasticHumanPlay, self).__init__(env)
-        self._humanprob = humanprob
-        self._is_human = False
-        self.henv = henv
-        self.rng = np.random.RandomState()
-
-    def reset(self, **kwargs):
-
-        self.henv.reset(**kwargs)
-        obs = self.env.reset(**kwargs)
-
-        self._is_human = False
-        if self.rng.rand() < self._humanprob:
-            self._is_human = True
-
-        return obs
-
-    def step(self, action):
-        if self._is_human:
-            obs, rew, done, info = self.henv.step(None)
-        else:
-            obs, rew, done, info = self.env.step(action)
-
-        return obs, rew, done, info
-
-    @property
-    def is_human(self):
-        return self._is_human
-
 class EnvMaker(object):
-    def __init__(self, game_state, num_processes, actions=None, human_actions=None, scenario=None, 
-            log_dir='log', record_dir='bk2s', record_interval=10, order_actions=True):
+    def __init__(self, supervised_levels=None, play_path='human', scenario='contest', order_actions=True):
 
-        chunks = [num_processes//len(game_state)]*len(game_state)
-        chunks[-1]+=num_processes-sum(chunks)
+        all_actions = []
 
-        processes = []
+        if supervised_levels == None:
+            supervised_levels = []
 
-        for i, size in enumerate(chunks):
-            for j in range(size):
-                processes.append(game_state[i])
+        self.play_path = play_path
+        self.scenario = scenario
 
-        self.processes = tuple(processes)
+        actions_map = self.get_human_actions(supervised_levels)
 
-        seed = 1
+        self.supervised_levels = set(supervised_levels)
 
-        if human_actions is not None:
-            # supervised actions per process
-            all_actions = []
-            for arr in human_actions:
-                all_actions+=arr
+        all_actions = []
 
-            action_set = [np.array(a, 'int') for a in set(map(tuple, all_actions))]
+        for game, state in actions_map:
+            for ep in actions_map[(game,state)]:
+                all_actions+=actions_map[(game,state)][ep]
 
+        action_set = [np.array(a, 'int') for a in set(map(tuple, all_actions))]
+
+        if len(action_set)>0:
             if order_actions:
                 # order key actions, helps with debugging
                 buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
@@ -471,38 +420,15 @@ class EnvMaker(object):
 
                 action_set = [np.array(a) for _,a in sorted(zip(sort_index,actions_tup))]
 
-            envs = [_make_env(processes[i][0], processes[i][1], seed, i, 
-                        log_dir, scenario, action_set, human_actions[i], record_dir, record_interval)
-                            for i in range(num_processes)]
+        self.action_set = action_set     
 
-        elif actions is not None:
-            # unsupervised
-            action_set = [np.array(a, 'int') for a in OrderedSet(map(tuple, actions))]
+    def get_human_actions(self, game_state):
 
-            envs = [_make_env(processes[i][0], processes[i][1], seed, i, 
-                        log_dir, scenario, action_set, None, record_dir, record_interval)
-                            for i in range(num_processes)]
-
-
-        else:
-            action_set = None
-            envs = [_make_env(processes[i][0], processes[i][1], seed, i, 
-                        log_dir, scenario, action_set, None, record_dir, record_interval)
-                            for i in range(num_processes)]
-
-        self.action_set = action_set
-        self.vec_env = make_vec_env(envs)
-
-    @classmethod
-    def from_human_play(cls, game_state, play_path, scenario='contest', log_dir='log_human', 
-            record_dir='supervised_bk2s', record_interval=10, max_episodes=None):
-
-        buttons = ["B", "A", "MODE", "START", "UP", "DOWN", "LEFT", "RIGHT", "C", "Y", "X", "Z"]
         actions_map = {}
 
         for game, state in set(game_state):
 
-            path = os.path.join(play_path,game,scenario)
+            path = os.path.join(self.play_path,game,self.scenario)
 
             fi = os.path.join(path,'{}-{}.json'.format(game,state))
 
@@ -513,6 +439,33 @@ class EnvMaker(object):
 
                 arr = SonicActions.from_sonic_config(actions_map[(game,state)][ep])
                 actions_map[(game,state)][ep] = arr.data.tolist()
+
+        return actions_map
+
+    def make_vec_env(self, game_state, num_processes, log_dir=None, record_dir=None, record_interval=None):
+        chunks = [num_processes//len(game_state)]*len(game_state)
+        chunks[-1]+=num_processes-sum(chunks)
+
+        processes = []
+
+        for i, size in enumerate(chunks):
+            for j in range(size):
+                processes.append(game_state[i])
+
+        envs =  [_make_env(game = processes[i][0], state = processes[i][1], seed = 1, rank = i, 
+                    log_dir = log_dir, scenario = self.scenario, action_set = self.action_set, 
+                        actions = None, record_dir = record_dir, record_interval = record_interval)
+                            for i in range(num_processes)]
+
+        return _make_vec_env(envs)
+
+    def make_human_vec_env(self, game_state, log_dir=None, human_prob=0.1, record_dir=None, record_interval=None, max_episodes=None):
+
+        for game, state in game_state:
+            if (game,state) not in self.supervised_levels:
+                raise KeyError('{} not found'.format((game,state)))
+
+        actions_map = self.get_human_actions(game_state)
 
         sonic_actions = []
         processes = []
@@ -527,19 +480,29 @@ class EnvMaker(object):
                     processes.append(k)
 
         num_processes = len(processes)
-        return cls(processes, num_processes, None, sonic_actions, scenario, log_dir, record_dir, record_interval)
 
+        envs =  [_make_env(game = processes[i][0], state = processes[i][1], seed = 1, rank = i, 
+                    log_dir = log_dir, scenario = self.scenario, action_set = self.action_set, 
+                        actions = sonic_actions[i], human_prob = human_prob, record_dir = record_dir, record_interval = record_interval)
+                            for i in range(num_processes)]
 
-def _make_env(game, state, seed, rank, log_dir=None, scenario=None, action_set=None, 
-        actions=None,record_dir=None, record_interval=10):
+        return _make_vec_env(envs)
+
+def _make_env(game, state, seed, rank, log_dir=None, scenario='contest', action_set=None, 
+        actions=None, human_prob=0.1, record_dir=None, record_interval=10):
 
     def _thunk():
 
-        if scenario is None:
+        if actions is None:
             env = contest_make(game,state)
+            env = RetroWrapper(env, pid = rank)
         else:
             env = make(game, state, scenario=scenario)
+            env = RetroWrapper(env, pid = rank)
             env = gym.wrappers.TimeLimit(env, max_episode_steps=4500)
+            henv = HumanPlay(env, actions)
+            senv = StochasticFrameSkip(env, n=4, stickprob=0.25)
+            env = StochasticHumanPlay(senv, henv, humanprob=human_prob)
 
         env.seed(seed + rank)
 
@@ -551,75 +514,22 @@ def _make_env(game, state, seed, rank, log_dir=None, scenario=None, action_set=N
         if log_dir is not None:
             log_path = os.path.join(log_dir, state)
             os.makedirs(log_path, exist_ok=True)
-            env = bench.Monitor(env, os.path.join(log_path, str(rank)), allow_early_resets=True)
+            env = bench.Monitor(env, os.path.join(log_path, str(rank)))
 
         env = SonicObsWrapper(env)
         env = AllowBacktracking(env)
         env = SonicActDiscretizer(env, action_set)
-        if actions is not None:
-            henv = HumanPlay(env, actions)
-            senv = StochasticFrameSkip(env, n=4, stickprob=0.25)
-            env = StochasticHumanPlay(senv, henv, humanprob=0.1)
 
         return env
 
     return _thunk
 
-class HumanActionVecEnv(VecEnvWrapper):
-    def __init__(self, env_fns, spaces=None):
-        import baselines.common.vec_env.subproc_vec_env as VecEnv
-        def worker(remote, parent_remote, env_fn_wrapper):
-            parent_remote.close()
-            env = env_fn_wrapper.x()
-            while True:
-                cmd, data = remote.recv()
-                if cmd == 'step':
-                    ob, reward, done, info = env.step(data)
-                    if done:
-                        ob = env.reset()
-                    remote.send((ob, reward, done, info))
-                elif cmd == 'reset':
-                    ob = env.reset()
-                    remote.send(ob)
-                elif cmd == 'render':
-                    remote.send(env.render(mode='rgb_array'))
-                elif cmd == 'close':
-                    remote.close()
-                    break
-                elif cmd == 'get_spaces':
-                    remote.send((env.observation_space, env.action_space))
-                elif cmd == 'is_human':
-                    if hasattr(env, 'is_human'):
-                        is_human = env.is_human
-                    else:
-                        is_human = False
-                    remote.send(is_human)
-                else:
-                    raise NotImplementedError
-        VecEnv.worker = worker
-        venv = VecEnv.SubprocVecEnv(env_fns, spaces)
-        VecEnvWrapper.__init__(self, venv)
-
-    def reset(self):
-        obs = self.venv.reset()
-        return obs
-
-    def step_wait(self):
-        obs, rews, dones, infos = self.venv.step_wait()
-        return obs, rews, dones, infos
-
-    @property
-    def is_human(self):
-        for remote in self.venv.remotes:
-            remote.send(('is_human', None))
-        return np.stack([remote.recv() for remote in self.venv.remotes])
-
-def make_vec_env(envs):
+def _make_vec_env(envs):
 
     num_processes = len(envs)
 
     if num_processes > 1:
-        envs = HumanActionVecEnv(envs)
+        envs = SubprocVecEnvWrapper(envs)
     else:
         envs = DummyVecEnv(envs)
 
@@ -638,10 +548,12 @@ def update_current_obs(current_obs,obs,envs,num_stack):
 
 if __name__ == "__main__":
 
-    maker = EnvMaker.from_human_play(game_state=[('SonicTheHedgehog-Genesis','GreenHillZone.Act1'),
-         ('SonicTheHedgehog-Genesis','GreenHillZone.Act3')], play_path='../../glf/play/human', scenario='contest', log_dir=None,
-        record_dir='../../test_bk2s',record_interval=1, max_episodes=4)
-    envs = maker.vec_env
+    maker = EnvMaker(supervised_levels=[('SonicTheHedgehog-Genesis','GreenHillZone.Act1'),
+        ('SonicTheHedgehog-Genesis','GreenHillZone.Act3')], play_path='../../glf/play/human', scenario='contest')
+
+    envs = maker.make_human_vec_env(game_state=[('SonicTheHedgehog-Genesis','GreenHillZone.Act1'), 
+        ('SonicTheHedgehog-Genesis','GreenHillZone.Act3')],log_dir=None,
+            record_dir='../../test_bk2s',record_interval=2, max_episodes=2)
 
     envs.reset()
     while True:
