@@ -24,10 +24,7 @@ class Trainer(object):
         eps = 1e-5,
         max_grad_norm = 0.5,
         num_steps = 4,
-        num_processes = 16,
         cuda = None,
-        num_frames = 10e6,
-        log_dir = 'log',
         seed = 1,
         use_gae = False,
         gamma = 0.99,
@@ -64,24 +61,15 @@ class Trainer(object):
         self.tau = tau
         self.gmat = gmat
 
-        self.em = EnvManager(supervised_levels, num_stack, play_path, scenario)
-        
-        if self.cuda:
-            torch.cuda.manual_seed(seed)
-            
         torch.set_num_threads(1)
 
-        if vis:
-            from visdom import Visdom
-            viz = Visdom(port=port)
-            win = None
+        self.em = EnvManager(supervised_levels, num_stack, play_path, scenario)
 
-        if self.gmat is not None:
+        actor_critic = Policy(self.em.obs_shape[0], self.em.n_action, self.recurrent_policy, self.gmat)
 
-            actor_critic = Policy(self.em.obs_shape, action_space, self.recurrent_policy, self.cuda, self.gmat)
-
-        else:
-            actor_critic = Policy(self.em.obs_shape, action_space, self.recurrent_policy, self.cuda)
+        if self.cuda:
+            torch.cuda.manual_seed(seed)
+            actor_critic.cuda()
 
         self.agent = A2C_ACKTR(
             actor_critic = actor_critic,
@@ -114,6 +102,7 @@ class Trainer(object):
     def _train(self, envs, num_frames, num_processes, log_interval, log_name):
 
         actor_critic = self.agent.actor_critic
+        obs_shape = self.em.obs_shape
 
         if self.gmat is not None:
             actor_critic.base.set_batches(processes)

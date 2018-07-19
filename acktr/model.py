@@ -12,32 +12,17 @@ class Flatten(nn.Module):
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_shape, action_space, recurrent_policy, cuda=False, games=None, temp = 1):
+    def __init__(self, n_channel, n_action, recurrent_policy, games=None, temp = 1):
         super(Policy, self).__init__()
-        if len(obs_shape) == 3:
-            if games is None:
-                self.base = CNNBase(obs_shape[0], recurrent_policy)
-                self.base_target = CNNBase(obs_shape[0], recurrent_policy)
-            else:
-                self.base = G(CNNBase(obs_shape[0], recurrent_policy),games)
-                self.base_target = G(CNNBase(obs_shape[0], recurrent_policy),games)
-        elif len(obs_shape) == 1:
-            assert not recurrent_policy, \
-                "Recurrent policy is not implemented for the MLP controller"
-            self.base = MLPBase(obs_shape[0])
+        if games is None:
+            self.base = CNNBase(n_channel, recurrent_policy)
+            self.base_target = CNNBase(n_channel, recurrent_policy)
         else:
-            raise NotImplementedError
+            self.base = G(CNNBase(n_channel, recurrent_policy),games)
+            self.base_target = G(CNNBase(n_channel, recurrent_policy),games)
 
-        if action_space.__class__.__name__ == "Discrete":
-            num_outputs = action_space.n
-            self.dist = Categorical(self.base.output_size, num_outputs, temp = temp)
-            self.dist_target = Categorical(self.base.output_size, num_outputs, temp = temp)
-        elif action_space.__class__.__name__ == "Box":
-            num_outputs = action_space.shape[0]
-            self.dist = DiagGaussian(self.base.output_size, num_outputs)
-            self.dist_target = DiagGaussian(self.base.output_size, num_outputs)
-        else:
-            raise NotImplementedError
+        self.dist = Categorical(self.base.output_size, n_action, temp = temp)
+        self.dist_target = Categorical(self.base.output_size, n_action, temp = temp)
 
         self.state_size = self.base.state_size
 
@@ -47,13 +32,6 @@ class Policy(nn.Module):
 
         self.base_target.eval()
         self.dist_target.eval()
-
-        if cuda:
-            self.base.cuda()
-            self.dist.cuda()
-            self.base_target.cuda()
-            self.dist_target.cuda()
-
 
     def forward(self, inputs, states, masks):
         raise NotImplementedError
@@ -156,44 +134,3 @@ class CNNBase(nn.Module):
                 x = torch.cat(outputs, 0)
 
         return self.critic_linear(x), x, states
-
-
-class MLPBase(nn.Module):
-    def __init__(self, num_inputs):
-        super(MLPBase, self).__init__()
-
-        init_ = lambda m: init(m,
-              init_normc_,
-              lambda x: nn.init.constant_(x, 0))
-
-        self.actor = nn.Sequential(
-            init_(nn.Linear(num_inputs, 64)),
-            nn.Tanh(),
-            init_(nn.Linear(64, 64)),
-            nn.Tanh()
-        )
-
-        self.critic = nn.Sequential(
-            init_(nn.Linear(num_inputs, 64)),
-            nn.Tanh(),
-            init_(nn.Linear(64, 64)),
-            nn.Tanh()
-        )
-
-        self.critic_linear = init_(nn.Linear(64, 1))
-
-        self.train()
-
-    @property
-    def state_size(self):
-        return 1
-
-    @property
-    def output_size(self):
-        return 64
-
-    def forward(self, inputs, states, masks):
-        hidden_critic = self.critic(inputs)
-        hidden_actor = self.actor(inputs)
-
-        return self.critic_linear(hidden_critic), hidden_actor, states

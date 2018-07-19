@@ -434,7 +434,11 @@ class EnvManager(object):
     def obs_shape(self):
         obs_shape = SonicConfig.OBS_SHAPE.value
         return (obs_shape[0] * self.num_stack, *obs_shape[1:])
-         
+
+    @property
+    def n_action(self):
+        return len(self.action_set)
+    
     def get_human_actions(self, game_state):
 
         actions_map = {}
