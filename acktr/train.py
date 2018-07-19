@@ -2,7 +2,7 @@
 import torch
 import numpy as np
 
-from glf.common.sonic_util import update_current_obs, EnvMaker
+from glf.common.sonic_util import update_current_obs, EnvManager
 from glf.common.containers import OrderedMapping
 from glf.acktr.a2c_acktr import A2C_ACKTR
 from glf.acktr.model import Policy
@@ -19,6 +19,7 @@ class Trainer(object):
         vis = False,
         value_loss_coef = 0.5,
         entropy_coef = 0.01,
+        lr = 1e-4,
         alpha = 0.99,
         eps = 1e-5,
         max_grad_norm = 0.5,
@@ -36,7 +37,10 @@ class Trainer(object):
         save_dir = 'trained_models',
         algo = 'acktr',
         port = 8097,
-        gmat = None):
+        gmat = None,
+        supervised_levels=None,
+        play_path='human',
+        scenario='contest'):
         
         torch.manual_seed(seed)
 
@@ -47,7 +51,8 @@ class Trainer(object):
 
         self.recurrent_policy = recurrent_policy
         self.value_loss_coef = value_loss_coef
-        self.entropy_coef = entropy_coef 
+        self.entropy_coef = entropy_coef
+        self.lr = lr 
         self.alpha = alpha
         self.eps = eps
         self.max_grad_norm = max_grad_norm
@@ -58,6 +63,8 @@ class Trainer(object):
         self.gamma = gamma
         self.tau = tau
         self.gmat = gmat
+
+        self.em = EnvManager(supervised_levels, num_stack, play_path, scenario)
         
         if self.cuda:
             torch.cuda.manual_seed(seed)
@@ -89,42 +96,27 @@ class Trainer(object):
             alpha = self.alpha,
             eps = self.eps,
             max_grad_norm = self.max_grad_norm)
-
-    def set_lr(self, lr):
-
-        if self.agent is not None:
-
-            for param_group in self.agent.optimizer.param_groups:
-                param_group['lr'] = lr
-
-        else:
-
-            raise RuntimeError('agent is not set')
    
-    def train(self,game_state,lr=1e-4,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10, log_name='rewards.csv',
+    def train(self,game_state,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10, log_name='rewards.csv',
         record_dir='bk2s',record_interval=10):
 
-        maker = EnvMaker(game_state=game_state, num_processes=num_processes, log_dir=log_dir,actions=self.actions,
+        envs = self.em.make_vec_env(game_state=game_state, num_processes=num_processes, log_dir=log_dir,
             record_dir=record_dir, record_interval=record_interval)
 
-        envs = maker.vec_env
+        self._train(envs, num_frames, num_processes, log_interval, log_name)
 
-        self._train(envs, lr, num_frames, num_processes, log_interval, log_name)
-
-    def train_from_human(self,game_state,lr=1e-4,num_frames=10e6,log_dir='log_human',log_interval=10,
+    def train_from_human(self,game_state,num_frames=10e6,log_dir='log_human',log_interval=10,
         log_name='supervised_rewards.csv',record_dir='supervised_bk2s',record_interval=10,
-        play_path='human',scenario='contest'):
+        human_prob=0.1,max_episodes=None):
 
-        maker = EnvMaker.from_human_play(game_state=game_state, play_path=play_path, scenario=scenario, log_dir=log_dir,
-            record_dir=record_dir,record_interval=record_interval)
-        envs = maker.vec_env
-        self.actions = maker.action_set
+        envs = self.em.make_human_vec_env(game_state=game_state, log_dir=log_dir, record_dir=record_dir, 
+            record_interval=record_interval, human_prob=human_prob, max_episodes=max_episodes)
 
         num_processes = envs.num_envs
 
-        self._train(envs, lr, num_frames, num_processes, log_interval, log_name)
+        self._train(envs, num_frames, num_processes, log_interval, log_name)
 
-    def _train(self, envs, lr, num_frames, num_processes, log_interval, log_name):
+    def _train(self, envs, num_frames, num_processes, log_interval, log_name):
 
         obs_shape = envs.observation_space.shape
         obs_shape = (obs_shape[0] * self.num_stack, *obs_shape[1:])

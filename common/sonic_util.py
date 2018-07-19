@@ -30,6 +30,7 @@ class SonicConfig(Enum):
     BUTTONS_SAME_AS = {'B':['B','A','C']},
     BUTTONS_INACTIVE = ["MODE", "START", "Y", "X", "Z"]
     DEFAULT_ACTIONS = [['LEFT'], ['RIGHT'], ['B'], ['LEFT', 'DOWN'], ['RIGHT', 'DOWN'], ['DOWN'], ['DOWN', 'B']]
+    OBS_SHAPE = (3, 300, 200)
 
 class SonicObsWrapper(gym.ObservationWrapper):
     """
@@ -373,14 +374,15 @@ class SonicActions(Sequence):
     def __getitem__(self, index):
         return self.data[index]
 
-class EnvMaker(object):
-    def __init__(self, supervised_levels=None, play_path='human', scenario='contest', order_actions=True):
+class EnvManager(object):
+    def __init__(self, supervised_levels=None, num_stack = 4, play_path='human', scenario='contest', order_actions=True):
 
         all_actions = []
 
         if supervised_levels == None:
             supervised_levels = []
 
+        self.num_stack
         self.play_path = play_path
         self.scenario = scenario
 
@@ -426,8 +428,13 @@ class EnvMaker(object):
                 action_set = [np.array(a) for _,a in sorted(zip(sort_index,actions_tup))]
 
         self.action_set = action_set
-        self._actions_map = actions_map     
+        self._actions_map = actions_map
 
+    @property
+    def obs_shape(self):
+        obs_shape = SonicConfig.OBS_SHAPE.value
+        return (obs_shape[0] * self.num_stack, *obs_shape[1:])
+         
     def get_human_actions(self, game_state):
 
         actions_map = {}
@@ -466,7 +473,7 @@ class EnvMaker(object):
 
         return _make_vec_env(envs)
 
-    def make_human_vec_env(self, game_state=None, log_dir=None, human_prob=0.1, record_dir=None, record_interval=None, max_episodes=None):
+    def make_human_vec_env(self, game_state=None, log_dir=None, record_dir=None, record_interval=None, human_prob=0.1, max_episodes=None):
 
         sonic_actions = []
         processes = []
@@ -555,7 +562,7 @@ def update_current_obs(current_obs,obs,envs,num_stack):
 
 if __name__ == "__main__":
 
-    maker = EnvMaker(supervised_levels=[('SonicTheHedgehog-Genesis','GreenHillZone.Act1'),
+    maker = EnvManager(supervised_levels=[('SonicTheHedgehog-Genesis','GreenHillZone.Act1'),
         ('SonicTheHedgehog-Genesis','GreenHillZone.Act3')], play_path='../../glf/play/human', scenario='contest')
 
     envs = maker.make_human_vec_env(log_dir=None,record_dir='../../test_bk2s',record_interval=2, max_episodes=2)
