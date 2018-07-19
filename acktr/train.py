@@ -38,8 +38,6 @@ class Trainer(object):
         supervised_levels=None,
         play_path='human',
         scenario='contest'):
-        
-        torch.manual_seed(seed)
 
         if cuda is None:
             self.cuda = torch.cuda.is_available()
@@ -68,8 +66,10 @@ class Trainer(object):
         actor_critic = Policy(self.em.obs_shape[0], self.em.n_action, self.recurrent_policy, self.gmat)
 
         if self.cuda:
-            torch.cuda.manual_seed(seed)
+            torch.cuda.manual_seed_all(seed)
             actor_critic.cuda()
+        else:
+            torch.manual_seed(seed)
 
         self.agent = A2C_ACKTR(
             actor_critic = actor_critic,
