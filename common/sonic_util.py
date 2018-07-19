@@ -30,7 +30,7 @@ class SonicConfig(Enum):
     BUTTONS_SAME_AS = {'B':['B','A','C']},
     BUTTONS_INACTIVE = ["MODE", "START", "Y", "X", "Z"]
     DEFAULT_ACTIONS = [['LEFT'], ['RIGHT'], ['B'], ['LEFT', 'DOWN'], ['RIGHT', 'DOWN'], ['DOWN'], ['DOWN', 'B']]
-    OBS_SHAPE = (3, 300, 200)
+    OBS_SHAPE = (3, 224, 320)
 
 class SonicObsWrapper(gym.ObservationWrapper):
     """

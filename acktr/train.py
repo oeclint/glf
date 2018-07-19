@@ -76,23 +76,18 @@ class Trainer(object):
             viz = Visdom(port=port)
             win = None
 
-        self.agent = None
-        self.actions = None
-
-    def make_agent(self, lr, obs_shape, action_space):
-
         if self.gmat is not None:
 
-            actor_critic = Policy(obs_shape, action_space, self.recurrent_policy, self.cuda, self.gmat)
+            actor_critic = Policy(self.em.obs_shape, action_space, self.recurrent_policy, self.cuda, self.gmat)
 
         else:
-            actor_critic = Policy(obs_shape, action_space, self.recurrent_policy, self.cuda)
+            actor_critic = Policy(self.em.obs_shape, action_space, self.recurrent_policy, self.cuda)
 
         self.agent = A2C_ACKTR(
             actor_critic = actor_critic,
             value_loss_coef = self.value_loss_coef,
             entropy_coef = self.entropy_coef,
-            lr = lr,
+            lr = self.lr,
             alpha = self.alpha,
             eps = self.eps,
             max_grad_norm = self.max_grad_norm)
@@ -117,14 +112,6 @@ class Trainer(object):
         self._train(envs, num_frames, num_processes, log_interval, log_name)
 
     def _train(self, envs, num_frames, num_processes, log_interval, log_name):
-
-        obs_shape = envs.observation_space.shape
-        obs_shape = (obs_shape[0] * self.num_stack, *obs_shape[1:])
-
-        if self.agent is None:
-            self.make_agent(lr,obs_shape, envs.action_space)
-        else:
-            self.set_lr(lr)
 
         actor_critic = self.agent.actor_critic
 
