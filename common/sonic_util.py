@@ -382,7 +382,7 @@ class EnvManager(object):
         if supervised_levels == None:
             supervised_levels = []
 
-        self.num_stack
+        self.num_stack = num_stack
         self.play_path = play_path
         self.scenario = scenario
 

@@ -105,7 +105,7 @@ class Trainer(object):
 
         self._train(envs, num_frames, num_processes, log_interval, log_name)
 
-    def train_from_human(self,game_state,num_frames=10e6,log_dir='log_human',log_interval=10,
+    def train_from_human(self,game_state=None,num_frames=10e6,log_dir='log_human',log_interval=10,
         log_name='supervised_rewards.csv',record_dir='supervised_bk2s',record_interval=10,
         human_prob=0.1,max_episodes=None):
 
