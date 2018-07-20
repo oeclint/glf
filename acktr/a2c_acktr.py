@@ -53,7 +53,12 @@ class A2C_ACKTR(object):
             not_human = ~human_proc
             keep = np.where(not_human)[0]
             # do not use human demonstration advantages to update log probs
-            action_loss = -(advantages.detach()[:,keep,:] * action_log_probs[:,keep,:]).mean()            
+            if len(keep) > 0:
+                action_loss = -(advantages.detach()[:,keep,:] * action_log_probs[:,keep,:]).mean()
+            else:
+                action_loss = torch.tensor(0.0)
+                if value_loss.is_cuda:
+                    action_loss = action_loss.cuda()            
 
         if self.acktr and self.optimizer.steps % self.optimizer.Ts == 0:
             # Sampled fisher, see Martens 2014
