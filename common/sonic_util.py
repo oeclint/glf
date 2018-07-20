@@ -20,8 +20,6 @@ from baselines.common.vec_env import VecEnvWrapper
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 
-from glf.common.containers import OrderedSet
-
 import torch
 from enum import Enum
 
@@ -278,8 +276,58 @@ class RetroWrapper(gym.Wrapper):
     def set_movie_id(self, mid):
         self.env.unwrapped.movie_id = mid
 
+class VecFrameStack(VecEnvWrapper):
+    """
+    Vectorized environment base class
+    """
+    def __init__(self, venv, nstack, is_torch=True):
+        self.venv = venv
+        self.remotes = venv.remotes
+        self.nstack = nstack
+        wos = venv.observation_space # wrapped ob space
+        low = np.repeat(wos.low, self.nstack, axis=0)
+        high = np.repeat(wos.high, self.nstack, axis=0)
+        self.is_torch = is_torch
+        if not is_torch:
+            self.stackedobs = np.zeros((venv.num_envs,)+low.shape, low.dtype)
+        else:
+            self.stackedobs = torch.zeros((venv.num_envs,)+low.shape)
+        observation_space = gym.spaces.Box(low=low, high=high, dtype=venv.observation_space.dtype)
+        VecEnvWrapper.__init__(self, venv, observation_space=observation_space)
+
+    def step_wait(self):
+        obs, rews, news, infos = self.venv.step_wait()
+        if self.nstack > 1:
+            # roll
+            self.stackedobs[:, :-obs.shape[1]] = self.stackedobs[:, obs.shape[1]:] 
+        for (i, new) in enumerate(news):
+            if new:
+                self.stackedobs[i] = 0
+        if self.is_torch:
+            obs = torch.from_numpy(obs).float()
+        self.stackedobs[:, -obs.shape[1]:] = obs
+        return self.stackedobs, rews, news, infos
+
+    def reset(self):
+        """
+        Reset all environments
+        """
+        obs = self.venv.reset()
+        self.stackedobs[...] = 0
+        if self.is_torch:
+            obs = torch.from_numpy(obs).float()
+        self.stackedobs[:, -obs.shape[1]:] = obs
+        return self.stackedobs
+
+    def close(self):
+        self.venv.close()
+
+    def cuda(self):
+        if self.is_torch:
+            self.stackedobs = self.stackedobs.cuda()
+
 class SubprocVecEnvWrapper(VecEnvWrapper):
-    def __init__(self, env_fns, spaces=None):
+    def __init__(self, env_fns, nstack, spaces=None):
         import baselines.common.vec_env.subproc_vec_env as VecEnv
         def worker(remote, parent_remote, env_fn_wrapper):
             parent_remote.close()
@@ -307,6 +355,7 @@ class SubprocVecEnvWrapper(VecEnvWrapper):
                     raise NotImplementedError
         VecEnv.worker = worker
         venv = VecEnv.SubprocVecEnv(env_fns, spaces)
+        venv = VecFrameStack(venv, nstack)
         VecEnvWrapper.__init__(self, venv)
 
     def reset(self):
@@ -322,6 +371,9 @@ class SubprocVecEnvWrapper(VecEnvWrapper):
         for remote in self.venv.remotes:
             remote.send(('is_human', None))
         return np.stack([remote.recv() for remote in self.venv.remotes])
+
+    def cuda(self):
+        self.venv.cuda()
 
 class SonicActions(Sequence):
 
@@ -475,7 +527,7 @@ class EnvManager(object):
                         actions = None, record_dir = record_dir, record_interval = record_interval)
                             for i in range(num_processes)]
 
-        return _make_vec_env(envs)
+        return SubprocVecEnvWrapper(envs, self.num_stack)
 
     def make_human_vec_env(self, game_state=None, log_dir=None, record_dir=None, record_interval=None, human_prob=0.1, max_episodes=None):
 
@@ -504,7 +556,7 @@ class EnvManager(object):
                         actions = sonic_actions[i], human_prob = human_prob, record_dir = record_dir, record_interval = record_interval)
                             for i in range(num_processes)]
 
-        return _make_vec_env(envs)
+        return SubprocVecEnvWrapper(envs, self.num_stack)
 
 def _make_env(game, state, seed, rank, log_dir=None, scenario='contest', action_set=None, 
         actions=None, human_prob=0.1, record_dir=None, record_interval=10):
@@ -541,28 +593,6 @@ def _make_env(game, state, seed, rank, log_dir=None, scenario='contest', action_
         return env
 
     return _thunk
-
-def _make_vec_env(envs):
-
-    num_processes = len(envs)
-
-    if num_processes > 1:
-        envs = SubprocVecEnvWrapper(envs)
-    else:
-        envs = DummyVecEnv(envs)
-
-    if len(envs.observation_space.shape) == 1:
-        envs = VecNormalize(envs)
-
-    return envs
-
-def update_current_obs(current_obs,obs,envs,num_stack):
-    
-    shape_dim0 = envs.observation_space.shape[0]
-    obs = torch.from_numpy(obs).float()
-    if num_stack > 1:
-        current_obs[:, :-shape_dim0] = current_obs[:, shape_dim0:]
-    current_obs[:, -shape_dim0:] = obs
 
 if __name__ == "__main__":
 

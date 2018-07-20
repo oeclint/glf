@@ -2,7 +2,7 @@
 import torch
 import numpy as np
 
-from glf.common.sonic_util import update_current_obs, EnvManager
+from glf.common.sonic_util import EnvManager
 from glf.common.containers import OrderedMapping
 from glf.acktr.a2c_acktr import A2C_ACKTR
 from glf.acktr.model import Policy
@@ -16,7 +16,6 @@ class Trainer(object):
     def __init__(self, 
         num_stack = 4,
         recurrent_policy = False,
-        vis = False,
         value_loss_coef = 0.5,
         entropy_coef = 0.01,
         lr = 1e-4,
@@ -29,11 +28,6 @@ class Trainer(object):
         use_gae = False,
         gamma = 0.99,
         tau = 0.95,
-        vis_interval = 100,
-        save_interval = 100,
-        save_dir = 'trained_models',
-        algo = 'acktr',
-        port = 8097,
         gmat = None,
         supervised_levels=None,
         play_path='human',
@@ -86,7 +80,8 @@ class Trainer(object):
         envs = self.em.make_vec_env(game_state=game_state, num_processes=num_processes, log_dir=log_dir,
             record_dir=record_dir, record_interval=record_interval)
 
-        self._train(envs, num_frames, num_processes, log_interval, log_name)
+        runner = Runner(self, envs, num_frames, num_processes, log_interval, log_name)
+        runner.run()
 
     def train_from_human(self,game_state=None,num_frames=10e6,log_dir='log_human',log_interval=10,
         log_name='supervised_rewards.csv',record_dir='supervised_bk2s',record_interval=10,
@@ -97,39 +92,61 @@ class Trainer(object):
 
         num_processes = envs.num_envs
 
-        self._train(envs, num_frames, num_processes, log_interval, log_name)
+        runner = Runner(self, envs, num_frames, num_processes, log_interval, log_name)
+        runner.run()
 
-    def _train(self, envs, num_frames, num_processes, log_interval, log_name):
+class Runner(object):
 
-        actor_critic = self.agent.actor_critic
-        obs_shape = self.em.obs_shape
+    def __init__(self, trainer, envs, num_frames, num_processes, log_interval, log_name):
+        self.trainer = trainer
+        self.envs = envs
+        self.num_frames = num_frames
+        self.num_processes = num_processes
+        self.log_interval = log_interval
+        self.log_name = log_name
 
-        if self.gmat is not None:
+    def run(self):
+
+        num_frames = self.num_frames
+        num_processes = self.num_processes
+        
+        agent = self.trainer.agent
+        actor_critic = self.trainer.agent.actor_critic
+        cuda = self.trainer.cuda
+        num_steps = self.trainer.num_steps
+        use_gae = self.trainer.use_gae
+        gamma = self.trainer.gamma
+        tau = self.trainer.tau
+
+        envs = self.envs
+        obs_shape = envs.observation_space.shape
+
+        if self.trainer.gmat is not None:
             actor_critic.base.set_batches(processes)
 
-        csvwriter = CSVOutputFormat(log_name)
+        csvwriter = CSVOutputFormat(self.log_name)
 
-        rollouts = RolloutStorage(self.num_steps, num_processes, obs_shape, envs.action_space, actor_critic.state_size)
-        current_obs = torch.zeros(num_processes, *obs_shape)
+        rollouts = RolloutStorage(num_steps, num_processes, obs_shape, envs.action_space, actor_critic.state_size)
 
+        if cuda:
+            rollouts.cuda()
+            envs.cuda()
+        
         obs = envs.reset()
-        update_current_obs(current_obs, obs, envs, self.num_stack)
-        rollouts.observations[0].copy_(current_obs)
+
+        rollouts.observations[0].copy_(obs)
 
         # These variables are used to compute average rewards for all processes.
         episode_rewards = torch.zeros([num_processes, 1])
         final_rewards = torch.zeros([num_processes, 1])
-        is_human = np.array([[False]*num_processes]*self.num_steps)
 
-        if self.cuda:
-            current_obs = current_obs.cuda()
-            rollouts.cuda()
+        is_human = np.array([[False]*num_processes]*num_steps)
 
-        num_updates = int(num_frames) // self.num_steps // num_processes
+        num_updates = int(num_frames) // num_steps // num_processes
 
         start = time.time()
         for j in range(num_updates):
-            for step in range(self.num_steps):
+            for step in range(num_steps):
 
                 with torch.no_grad():
                     value, actor_actions, action_log_prob, states = actor_critic.act(
@@ -141,45 +158,35 @@ class Trainer(object):
                 
                 cpu_actions = actor_actions.squeeze(1).cpu().numpy()
 
-                obs, reward, done, info = envs.step(cpu_actions)  
-                reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
+                obs, reward, done, info = envs.step(cpu_actions)
+                reward = torch.from_numpy(reward).unsqueeze(1).float()
                 episode_rewards += reward
 
-                # If done then clean the history of observations.
                 masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in done])
                 final_rewards *= masks
                 final_rewards += (1 - masks) * episode_rewards
                 episode_rewards *= masks
 
-                if self.cuda:
-                    masks = masks.cuda()
-
-                if current_obs.dim() == 4:
-                    current_obs *= masks.unsqueeze(2).unsqueeze(2)
-                else:
-                    current_obs *= masks
-
-                update_current_obs(current_obs, obs, envs, self.num_stack)
-                rollouts.insert(current_obs, states, actor_actions, action_log_prob, value, reward, masks)
+                rollouts.insert(obs, states, actor_actions, action_log_prob, value, reward, masks)
           
             with torch.no_grad():
                 next_value = actor_critic.get_value(rollouts.observations[-1],
                                                     rollouts.states[-1],
                                                     rollouts.masks[-1]).detach()
 
-            rollouts.compute_returns(next_value, self.use_gae, self.gamma, self.tau)
+            rollouts.compute_returns(next_value, use_gae, gamma, tau)
 
             human_proc = np.any(is_human,axis=0)
             if np.any(human_proc):
-                value_loss, action_loss, dist_entropy = self.agent.update(rollouts, human_proc)
+                value_loss, action_loss, dist_entropy = agent.update(rollouts, human_proc)
             else:
-                value_loss, action_loss, dist_entropy = self.agent.update(rollouts)
+                value_loss, action_loss, dist_entropy = agent.update(rollouts)
 
             rollouts.after_update()
  
-            if j % log_interval == 0:
+            if j % self.log_interval == 0:
                 end = time.time()
-                total_num_steps = (j + 1) * num_processes * self.num_steps
+                total_num_steps = (j + 1) * num_processes * num_steps
 
                 kv = OrderedMapping([("updates", j),
                                   ("num_timesteps", total_num_steps),
@@ -188,9 +195,9 @@ class Trainer(object):
                                   ("median_reward", final_rewards.median().item()),
                                   ("min_reward", final_rewards.min().item()),
                                   ("max_reward", final_rewards.max().item()),
-                                  ("value_loss", value_loss * self.agent.value_loss_coef),
+                                  ("value_loss", value_loss * agent.value_loss_coef),
                                   ("action_loss", action_loss),
-                                  ("dist_entropy", dist_entropy * self.agent.entropy_coef)])
+                                  ("dist_entropy", dist_entropy * agent.entropy_coef)])
 
                 csvwriter.writekvs(kv)
 
