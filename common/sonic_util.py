@@ -206,7 +206,8 @@ class StochasticHumanPlay(gym.Wrapper):
         self._humanprob = humanprob
         self._is_human = False
         self.henv = henv
-        self.rng = np.random.RandomState()
+        seed = env.unwrapped.pid
+        self.rng = np.random.RandomState(seed)
         env.unwrapped.set_stoch_env(self)
 
     def reset(self, **kwargs):
