@@ -167,6 +167,9 @@ class Runner(object):
                 final_rewards += (1 - masks) * episode_rewards
                 episode_rewards *= masks
 
+                if cuda:
+                    masks = masks.cuda()
+
                 rollouts.insert(obs, states, actor_actions, action_log_prob, value, reward, masks)
           
             with torch.no_grad():
