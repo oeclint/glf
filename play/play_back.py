@@ -7,6 +7,7 @@ import retro
 import argparse
 from glf.common.sonic_util import SonicActions
 from glf.common.parse import to_json
+import gym
 
 class PlayBack(object):
 
@@ -88,6 +89,7 @@ class PlayBack(object):
                 data = json.load(f)
 
             env = self.make(game=game, state=state, scenario=self.scenario)
+            env = gym.wrappers.TimeLimit(env, max_episode_seconds=300)
 
             for ep in data:
                 filtered_actions = []
@@ -112,25 +114,15 @@ class PlayBack(object):
 
             env.close()
 
-
-
-    # def actions(self):
-    #     with open(os.path.join(self.path,'{}-{}.json'.format(self.game,self.state))) as f:
-    #         data = json.load(f)
-    #     for ep in data:
-    #         data[ep] = SonicActions.from_sonic_config(data[ep])
-
-    #     return data
-
-        
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--game', help='retro game to use')
     parser.add_argument('--state', help='retro state to start from')
     parser.add_argument('--scenario', help='scenario to use', default='contest')
+    parser.add_argument('--mode', help='mode (play or filter)', default='play')
     args = parser.parse_args()
     p = PlayBack(game=args.game,state=args.state,scenario=args.scenario)
-#    p.play_bk2(render=True)
-#    p.play_json()
-    p.filter_json(min_rew=9000)
+    if args.mode == 'play':
+        p.play_json()
+    elif args.mode == 'filter':
+        p.filter_json(min_rew=9000)

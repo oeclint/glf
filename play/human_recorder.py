@@ -60,7 +60,7 @@ def main():
             print(state)
         sys.exit(1)
 
-    env = retro.make(game=args.game, state=args.state, use_restricted_actions=retro.ACTIONS_ALL, scenario=args.scenario)
+    env = retro.make(game=args.game, state=args.state, scenario=args.scenario)
     obs = env.reset()
     screen_height, screen_width = obs.shape[:2]
 

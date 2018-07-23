@@ -281,18 +281,14 @@ class VecFrameStack(VecEnvWrapper):
     """
     Vectorized environment base class
     """
-    def __init__(self, venv, nstack, is_torch=True):
+    def __init__(self, venv, nstack):
         self.venv = venv
         self.remotes = venv.remotes
         self.nstack = nstack
         wos = venv.observation_space # wrapped ob space
         low = np.repeat(wos.low, self.nstack, axis=0)
         high = np.repeat(wos.high, self.nstack, axis=0)
-        self.is_torch = is_torch
-        if not is_torch:
-            self.stackedobs = np.zeros((venv.num_envs,)+low.shape, low.dtype)
-        else:
-            self.stackedobs = torch.zeros((venv.num_envs,)+low.shape)
+        self.stackedobs = torch.zeros((venv.num_envs,)+low.shape)
         observation_space = gym.spaces.Box(low=low, high=high, dtype=venv.observation_space.dtype)
         VecEnvWrapper.__init__(self, venv, observation_space=observation_space)
 
@@ -304,8 +300,7 @@ class VecFrameStack(VecEnvWrapper):
         for (i, new) in enumerate(news):
             if new:
                 self.stackedobs[i] = 0
-        if self.is_torch:
-            obs = torch.from_numpy(obs).float()
+        obs = torch.from_numpy(obs).float()
         self.stackedobs[:, -obs.shape[1]:] = obs
         return self.stackedobs, rews, news, infos
 
@@ -315,8 +310,7 @@ class VecFrameStack(VecEnvWrapper):
         """
         obs = self.venv.reset()
         self.stackedobs[...] = 0
-        if self.is_torch:
-            obs = torch.from_numpy(obs).float()
+        obs = torch.from_numpy(obs).float()
         self.stackedobs[:, -obs.shape[1]:] = obs
         return self.stackedobs
 
@@ -324,8 +318,7 @@ class VecFrameStack(VecEnvWrapper):
         self.venv.close()
 
     def cuda(self):
-        if self.is_torch:
-            self.stackedobs = self.stackedobs.cuda()
+        self.stackedobs = self.stackedobs.cuda()
 
 class SubprocVecEnvWrapper(VecEnvWrapper):
     def __init__(self, env_fns, nstack, spaces=None):
@@ -570,7 +563,7 @@ def _make_env(game, state, seed, rank, log_dir=None, scenario='contest', action_
         else:
             env = make(game, state, scenario=scenario)
             env = RetroWrapper(env, pid = rank)
-            env = gym.wrappers.TimeLimit(env, max_episode_steps=4500)
+            env = gym.wrappers.TimeLimit(env, max_episode_seconds=300)
             henv = HumanPlay(env, actions)
             senv = StochasticFrameSkip(env, n=4, stickprob=0.25)
             env = StochasticHumanPlay(senv, henv, humanprob=human_prob)
