@@ -125,4 +125,4 @@ if __name__ == '__main__':
     if args.mode == 'play':
         p.play_json()
     elif args.mode == 'filter':
-        p.filter_json(min_rew=9000)
+        p.filter_json(min_rew=8999)
