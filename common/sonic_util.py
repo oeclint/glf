@@ -563,7 +563,7 @@ def _make_env(game, state, seed, rank, log_dir=None, scenario='contest', action_
         else:
             env = make(game, state, scenario=scenario)
             env = RetroWrapper(env, pid = rank)
-            env = gym.wrappers.TimeLimit(env, max_episode_seconds=300)
+            env = gym.wrappers.TimeLimit(env, max_episode_seconds=390)
             henv = HumanPlay(env, actions)
             senv = StochasticFrameSkip(env, n=4, stickprob=0.25)
             env = StochasticHumanPlay(senv, henv, humanprob=human_prob)

@@ -89,7 +89,7 @@ class PlayBack(object):
                 data = json.load(f)
 
             env = self.make(game=game, state=state, scenario=self.scenario)
-            env = gym.wrappers.TimeLimit(env, max_episode_seconds=300)
+            env = gym.wrappers.TimeLimit(env, max_episode_seconds=390)
 
             for ep in data:
                 filtered_actions = []
