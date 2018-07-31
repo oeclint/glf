@@ -471,7 +471,7 @@ class EnvManager(object):
 
                 action_set = [np.array(a) for _,a in sorted(zip(sort_index,actions_tup))]
 
-        elif len(actions_set) == 0:
+        elif len(action_set) == 0:
 
             buttons = SonicConfig.BUTTONS.value
 
