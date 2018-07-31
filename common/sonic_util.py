@@ -69,24 +69,10 @@ class SonicActDiscretizer(gym.ActionWrapper):
     Wrap a gym-retro environment and make it use discrete
     actions for the Sonic game.
     """
-    def __init__(self, env, actions = None):
+    def __init__(self, env, actions):
         super(SonicActDiscretizer, self).__init__(env)
 
-        if actions is None or len(actions) == 0:
-
-            buttons = SonicConfig.BUTTONS.value
-
-            sonic_actions = SonicConfig.DEFAULT_ACTIONS.value
-
-            actions = []
-            for action in sonic_actions:
-                arr = np.array([0] * 12)
-                for button in action:
-                    arr[buttons.index(button)] = 1
-                actions.append(arr)
-
         self._actions = actions
-
         self.action_space = gym.spaces.Discrete(len(self._actions))
 
     def action(self, a):
@@ -472,6 +458,18 @@ class EnvManager(object):
                         sort_index.append(len(sort_index)+len(core_actions))
 
                 action_set = [np.array(a) for _,a in sorted(zip(sort_index,actions_tup))]
+
+        elif len(actions_set) == 0:
+
+            buttons = SonicConfig.BUTTONS.value
+
+            sonic_actions = SonicConfig.DEFAULT_ACTIONS.value
+
+            for action in sonic_actions:
+                arr = np.array([0] * 12)
+                for button in action:
+                    arr[buttons.index(button)] = 1
+                action_set.append(arr)
 
         self.action_set = action_set
         self._actions_map = actions_map
