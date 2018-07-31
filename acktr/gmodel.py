@@ -44,7 +44,7 @@ class G(nn.Module):
 
         self._batches = batches
 
-        batch_set = set(batch)
+        batch_set = set(batches)
 
         for i, k in enumerate(self._gkey):
             if k != 'default':
