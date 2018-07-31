@@ -6,25 +6,19 @@ from glf.common.containers import OrderedSet
 
 class G(nn.Module):
     
-    def __init__(self, cnn, games=None, key_size=128, g_size=20, one_g = False):
+    def __init__(self, cnn, games=None, key_size=512, g_size=20):
         super(G, self).__init__()
 
         if games==None:
             games = []
 
-        if not one_g:
-            self._gkey = OrderedSet(games)
-            self._gmat = nn.ParameterList([nn.Parameter(torch.randn(key_size, g_size)) for gs in self._gkey])
-        else:
-            self._gkey = OrderedSet(['default'])
-            self._gmat = nn.ParameterList([nn.Parameter(torch.randn(key_size, g_size)) for gs in self._gkey])
+        self._gkey = OrderedSet(games)
+        self._gmat = nn.ParameterList([nn.Parameter(torch.randn(key_size, g_size)) for gs in self._gkey])
 
         self._batches = []
 
         self.key_size = key_size
         self.g_size = g_size
-
-        self.one_g = one_g
 
         wn = nn.utils.weight_norm
 
@@ -41,10 +35,6 @@ class G(nn.Module):
             wn(nn.Linear(cnn.output_size,key_size)))
 
         self.fuse = nn.Linear(cnn.output_size+key_size,cnn.output_size)
-
-    @property
-    def is_cuda(self):
-        return any(p.is_cuda for p in self.parameters())
     
     @property
     def batches(self):
@@ -54,19 +44,13 @@ class G(nn.Module):
 
         self._batches = batches
 
-        for game_state in OrderedSet(batches):
-            self.add_game_state(game_state)
+        batch_set = set(batch)
 
-        # parameterlist does not register as cuda 
-        # if initialized as empty
-        if self.is_cuda:
-            self._gmat.cuda()
-
-    def add_game_state(self, game_state):
-        if not self.one_g:
-            if game_state not in self._gkey:
-                self._gkey.add(game_state)
-                self._gmat.append(nn.Parameter(torch.randn(self.key_size, self.g_size)))
+        for i, k in enumerate(self._gkey):
+            if k != 'default':
+                self._gmat[i].requires_grad = True
+                if k not in batch_set:
+                    self._gmat[i].requires_grad = False
 
     def gbatch(self):
 

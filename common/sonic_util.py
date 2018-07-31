@@ -254,6 +254,10 @@ class RetroWrapper(gym.Wrapper):
     def unwrapped(self):
         return self
 
+    @property
+    def game_state(self):
+        return (self.env.unwrapped.gamename, self.env.unwrapped.statename)
+    
     def auto_record(self, *args, **kwargs):
         self.env.unwrapped.auto_record(*args, **kwargs)
 
@@ -331,6 +335,8 @@ class SubprocVecEnvWrapper(VecEnvWrapper):
                     remote.send((env.observation_space, env.action_space))
                 elif cmd == 'is_human':
                     remote.send(env.unwrapped.is_human)
+                elif cmd == 'get_game_state':
+                    remote.send(env.unwrapped.game_state)
                 else:
                     raise NotImplementedError
         VecEnv.worker = worker
@@ -352,6 +358,12 @@ class SubprocVecEnvWrapper(VecEnvWrapper):
             remote.send(('is_human', None))
         return np.stack([remote.recv() for remote in self.venv.remotes])
 
+    @property
+    def game_state(self):
+        for remote in self.venv.remotes:
+            remote.send(('get_game_state', None))
+        return [remote.recv() for remote in self.venv.remotes]
+    
     def cuda(self):
         self.venv.cuda()
 
@@ -594,6 +606,7 @@ if __name__ == "__main__":
     envs = maker.make_human_vec_env(log_dir=None,record_dir='../../test_bk2s',record_interval=2, max_episodes=2)
 
     envs.reset()
+
     while True:
         _obs, _rew, done, _info = envs.step(np.random.randint(0, len(maker.action_set), envs.num_envs))
         envs.render()

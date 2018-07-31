@@ -122,7 +122,7 @@ class Runner(object):
         obs_shape = envs.observation_space.shape
 
         if self.trainer.gmat is not None:
-            actor_critic.base.set_batches(processes)
+            actor_critic.base.set_batches(envs.game_state)
 
         csvwriter = CSVOutputFormat(self.log_name)
 
