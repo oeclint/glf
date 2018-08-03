@@ -72,7 +72,7 @@ class G(nn.Module):
     def forward(self, inputs, states, masks):
         
         _, x, states = self.cnn(inputs, states, masks)
-
+        x_critic = x
         n_batch = len(self.batches)
 
         if n_batch:
@@ -101,7 +101,7 @@ class G(nn.Module):
 
             #combine the result of the lookup with the latent state vector
             combination = torch.cat([x,value],dim=1)
-            x = self.fuse(combination)
+            x_critic = self.fuse(combination)
 
         #return policy decision
-        return self.cnn.critic_linear(x), x, states
+        return self.cnn.critic_linear(x_critic), x, states

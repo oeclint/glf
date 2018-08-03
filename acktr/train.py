@@ -57,22 +57,13 @@ class Trainer(object):
 
         self.em = EnvManager(supervised_levels, num_stack, play_path, scenario)
 
-        actor_critic = Policy(self.em.obs_shape[0], self.em.n_action, self.recurrent_policy, self.gmat)
+        self.actor_critic = Policy(self.em.obs_shape[0], self.em.n_action, self.recurrent_policy, self.gmat)
 
         if self.cuda:
             torch.cuda.manual_seed_all(seed)
-            actor_critic.cuda()
+            self.actor_critic.cuda()
         else:
             torch.manual_seed(seed)
-
-        self.agent = A2C_ACKTR(
-            actor_critic = actor_critic,
-            value_loss_coef = self.value_loss_coef,
-            entropy_coef = self.entropy_coef,
-            lr = self.lr,
-            alpha = self.alpha,
-            eps = self.eps,
-            max_grad_norm = self.max_grad_norm)
    
     def train(self,game_state,num_frames=10e6,num_processes=16,log_dir='log',log_interval=10, log_name='rewards.csv',
         record_dir='bk2s',record_interval=10):
@@ -80,7 +71,19 @@ class Trainer(object):
         envs = self.em.make_vec_env(game_state=game_state, num_processes=num_processes, log_dir=log_dir,
             record_dir=record_dir, record_interval=record_interval)
 
-        runner = Runner(self, envs, num_frames, num_processes, log_interval, log_name)
+        if self.gmat is not None:
+            self.actor_critic.base.set_batches(envs.game_state)
+
+        agent = A2C_ACKTR(
+            actor_critic = self.actor_critic,
+            value_loss_coef = self.value_loss_coef,
+            entropy_coef = self.entropy_coef,
+            lr = self.lr,
+            alpha = self.alpha,
+            eps = self.eps,
+            max_grad_norm = self.max_grad_norm)
+
+        runner = Runner(self, agent, envs, num_frames, num_processes, log_interval, log_name)
         runner.run()
 
     def train_from_human(self,game_state=None,num_frames=10e6,log_dir='log_human',log_interval=10,
@@ -92,13 +95,26 @@ class Trainer(object):
 
         num_processes = envs.num_envs
 
-        runner = Runner(self, envs, num_frames, num_processes, log_interval, log_name)
+        if self.gmat is not None:
+            self.actor_critic.base.set_batches(envs.game_state)
+
+        agent = A2C_ACKTR(
+            actor_critic = self.actor_critic,
+            value_loss_coef = self.value_loss_coef,
+            entropy_coef = self.entropy_coef,
+            lr = self.lr,
+            alpha = self.alpha,
+            eps = self.eps,
+            max_grad_norm = self.max_grad_norm)
+
+        runner = Runner(self, agent, envs, num_frames, num_processes, log_interval, log_name)
         runner.run()
 
 class Runner(object):
 
-    def __init__(self, trainer, envs, num_frames, num_processes, log_interval, log_name):
+    def __init__(self, trainer, agent, envs, num_frames, num_processes, log_interval, log_name):
         self.trainer = trainer
+        self.agent = agent
         self.envs = envs
         self.num_frames = num_frames
         self.num_processes = num_processes
@@ -110,8 +126,8 @@ class Runner(object):
         num_frames = self.num_frames
         num_processes = self.num_processes
         
-        agent = self.trainer.agent
-        actor_critic = self.trainer.agent.actor_critic
+        agent = self.agent
+        actor_critic = agent.actor_critic
         cuda = self.trainer.cuda
         num_steps = self.trainer.num_steps
         use_gae = self.trainer.use_gae
@@ -120,9 +136,6 @@ class Runner(object):
 
         envs = self.envs
         obs_shape = envs.observation_space.shape
-
-        if self.trainer.gmat is not None:
-            actor_critic.base.set_batches(envs.game_state)
 
         csvwriter = CSVOutputFormat(self.log_name)
 
